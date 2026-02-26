@@ -52,7 +52,7 @@ func TestStore_ListRuns(t *testing.T) {
 	_, _ = st.CreateRun("app1", "")
 	_, _ = st.CreateRun("app2", "")
 
-	runs, err := st.ListRuns("", 10)
+	runs, err := st.ListRuns("", 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestStore_ListRuns(t *testing.T) {
 		t.Errorf("expected 3 runs, got %d", len(runs))
 	}
 
-	runs, err = st.ListRuns("app1", 10)
+	runs, err = st.ListRuns("app1", 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

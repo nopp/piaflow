@@ -258,22 +258,39 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"run_id": runID, "status": "pending"})
 }
 
-// listRuns returns runs (optional app_id and limit query params) as JSON.
+// listRuns returns runs with pagination (query params: app_id, limit, offset or page) as JSON { runs, total }.
 func (s *Server) listRuns(w http.ResponseWriter, r *http.Request) {
 	appID := r.URL.Query().Get("app_id")
 	limitStr := r.URL.Query().Get("limit")
-	limit := 50
+	offsetStr := r.URL.Query().Get("offset")
+	pageStr := r.URL.Query().Get("page")
+	limit := 15
 	if limitStr != "" {
 		if n, err := strconv.Atoi(limitStr); err == nil && n > 0 {
 			limit = n
 		}
 	}
-	runs, err := s.store.ListRuns(appID, limit)
+	offset := 0
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 1 {
+			offset = (p - 1) * limit
+		}
+	} else if offsetStr != "" {
+		if n, err := strconv.Atoi(offsetStr); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	runs, err := s.store.ListRuns(appID, limit, offset)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, runs)
+	total, err := s.store.CountRuns(appID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"runs": runs, "total": total})
 }
 
 // getRun returns one run by ID or 404.

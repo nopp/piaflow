@@ -132,23 +132,26 @@ func (s *Store) GetRun(id int64) (*Run, error) {
 	return &r, nil
 }
 
-// ListRuns returns runs, optionally filtered by appID, limit.
-func (s *Store) ListRuns(appID string, limit int) ([]Run, error) {
+// ListRuns returns runs, optionally filtered by appID, with limit and offset for pagination.
+func (s *Store) ListRuns(appID string, limit, offset int) ([]Run, error) {
 	if limit <= 0 {
 		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	var rows *sql.Rows
 	var err error
 	if appID != "" {
 		rows, err = s.db.Query(`
 			SELECT id, app_id, status, COALESCE(commit_sha,''), COALESCE(log,''), started_at, ended_at
-			FROM runs WHERE app_id = ? ORDER BY started_at DESC LIMIT ?
-		`, appID, limit)
+			FROM runs WHERE app_id = ? ORDER BY started_at DESC LIMIT ? OFFSET ?
+		`, appID, limit, offset)
 	} else {
 		rows, err = s.db.Query(`
 			SELECT id, app_id, status, COALESCE(commit_sha,''), COALESCE(log,''), started_at, ended_at
-			FROM runs ORDER BY started_at DESC LIMIT ?
-		`, limit)
+			FROM runs ORDER BY started_at DESC LIMIT ? OFFSET ?
+		`, limit, offset)
 	}
 	if err != nil {
 		return nil, err
@@ -167,6 +170,17 @@ func (s *Store) ListRuns(appID string, limit int) ([]Run, error) {
 		runs = append(runs, r)
 	}
 	return runs, rows.Err()
+}
+
+// CountRuns returns the total number of runs, optionally filtered by appID.
+func (s *Store) CountRuns(appID string) (int64, error) {
+	var count int64
+	if appID != "" {
+		err := s.db.QueryRow(`SELECT COUNT(*) FROM runs WHERE app_id = ?`, appID).Scan(&count)
+		return count, err
+	}
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM runs`).Scan(&count)
+	return count, err
 }
 
 // User represents a user.

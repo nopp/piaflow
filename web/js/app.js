@@ -27,10 +27,14 @@ async function triggerRun(appId) {
   return res.json();
 }
 
-async function getRuns(appId = '', limit = 30) {
+const RUNS_PAGE_SIZE = 15;
+let runsCurrentPage = 1;
+
+async function getRuns(appId = '', limit = RUNS_PAGE_SIZE, offset = 0) {
   const params = new URLSearchParams();
   if (appId) params.set('app_id', appId);
   params.set('limit', String(limit));
+  params.set('offset', String(offset));
   const res = await fetchApi(`/runs?${params}`);
   if (!res.ok) throw new Error('Failed to load runs');
   return res.json();
@@ -175,13 +179,29 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-function renderRuns(container, runs) {
+function renderRuns(container, runs, total, page) {
   stopInlineLogPolling();
   const list = Array.isArray(runs) ? runs : [];
-  if (!list.length) {
+  const totalCount = typeof total === 'number' ? total : list.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / RUNS_PAGE_SIZE));
+  const currentPage = typeof page === 'number' && page >= 1 ? page : 1;
+
+  if (!list.length && currentPage === 1) {
     container.innerHTML = '<p class="empty-state">No runs yet. Trigger a run from the <a href="/apps.html">Apps</a> page.</p>';
     return;
   }
+
+  let paginationHtml = '';
+  if (totalCount > RUNS_PAGE_SIZE) {
+    paginationHtml = `
+      <div class="pagination">
+        <button type="button" class="btn btn-ghost btn-pagination-prev" ${currentPage <= 1 ? 'disabled' : ''}>Previous</button>
+        <span class="pagination-info">Page ${currentPage} of ${totalPages}</span>
+        <button type="button" class="btn btn-ghost btn-pagination-next" ${currentPage >= totalPages ? 'disabled' : ''}>Next</button>
+      </div>
+    `;
+  }
+
   container.innerHTML = `
     <table class="runs-table">
       <thead>
@@ -216,11 +236,27 @@ function renderRuns(container, runs) {
         `).join('')}
       </tbody>
     </table>
+    ${paginationHtml}
   `;
 
   container.querySelectorAll('.run-expand-btn').forEach(btn => {
     btn.addEventListener('click', () => toggleRunLogInline(Number(btn.dataset.runId)));
   });
+
+  const prevBtn = container.querySelector('.btn-pagination-prev');
+  if (prevBtn && currentPage > 1) {
+    prevBtn.addEventListener('click', () => {
+      runsCurrentPage = currentPage - 1;
+      loadRuns();
+    });
+  }
+  const nextBtn = container.querySelector('.btn-pagination-next');
+  if (nextBtn && currentPage < totalPages) {
+    nextBtn.addEventListener('click', () => {
+      runsCurrentPage = currentPage + 1;
+      loadRuns();
+    });
+  }
 
   const hasRunning = list.some(r => r.status === 'pending' || r.status === 'running');
   if (hasRunning && !runsListPollInterval) {
@@ -388,8 +424,11 @@ async function loadRuns() {
   if (!container) return;
   const wasExpanded = expandedRunId;
   try {
-    const runs = await getRuns();
-    renderRuns(container, runs);
+    const offset = (runsCurrentPage - 1) * RUNS_PAGE_SIZE;
+    const data = await getRuns('', RUNS_PAGE_SIZE, offset);
+    const runs = data.runs || data;
+    const total = typeof data.total === 'number' ? data.total : runs.length;
+    renderRuns(container, runs, total, runsCurrentPage);
     if (wasExpanded != null) {
       setTimeout(() => toggleRunLogInline(wasExpanded), 0);
     }

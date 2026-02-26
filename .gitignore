@@ -8,6 +8,7 @@
 # Do not commit prompt/history files
 PROMPTS.txt
 PROMPT-CRIAR-APP-DO-ZERO.txt
+PROMPT-CREATE-APP-FROM-SCRATCH.txt
 
 # OS and IDE
 .DS_Store
