@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PiaFlow — Acessos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="app-screen" class="app">
+    <header class="header">
+      <div class="header-row">
+        <div>
+          <h1 class="logo">PiaFlow</h1>
+          <p class="tagline">Lightweight CI/CD for Labs</p>
+        </div>
+        <nav class="header-nav">
+          <a href="/" class="btn btn-ghost">Recent runs</a>
+          <a href="/apps.html" class="btn btn-ghost">Apps</a>
+          <a href="/access.html" class="btn btn-ghost">Acessos</a>
+          <a href="/docs.html" class="btn btn-ghost" target="_blank" rel="noopener">Docs</a>
+        </nav>
+        <div class="header-actions">
+          <a id="current-user" class="current-user" href="/profile.html"></a>
+          <button type="button" id="logout-btn" class="btn btn-ghost">Logout</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <p id="server-error" class="form-error" hidden></p>
+
+      <section class="section">
+        <div class="section-header">
+          <h2 class="section-title">Grupos</h2>
+        </div>
+        <div class="split-grid">
+          <div class="panel-card">
+            <h3 class="panel-title">Criar grupo</h3>
+            <form id="group-form" class="stack-form">
+              <label class="form-label">Nome</label>
+              <input type="text" id="group-name" class="form-input" placeholder="devops" required />
+              <div class="form-actions compact">
+                <button type="submit" class="btn btn-primary">Criar grupo</button>
+              </div>
+            </form>
+          </div>
+          <div class="panel-card">
+            <h3 class="panel-title">Lista de grupos</h3>
+            <div id="groups-container" class="list-stack">
+              <div class="loading">Loading groups…</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <h2 class="section-title">Usuários</h2>
+        </div>
+        <div class="split-grid">
+          <div class="panel-card">
+            <h3 class="panel-title">Criar usuário</h3>
+            <form id="user-form" class="stack-form">
+              <label class="form-label">Username</label>
+              <input type="text" id="user-username" class="form-input" placeholder="alice" required />
+              <label class="form-label">Senha</label>
+              <input type="password" id="user-password" class="form-input" placeholder="senha do usuário" required />
+              <label class="form-checkbox-label"><input type="checkbox" id="user-is-admin" /> Usuário admin</label>
+              <label class="form-label">Grupos</label>
+              <div id="user-group-selector" class="checkbox-grid"></div>
+              <div class="form-actions compact">
+                <button type="submit" class="btn btn-primary">Criar usuário</button>
+              </div>
+            </form>
+          </div>
+          <div class="panel-card">
+            <h3 class="panel-title">Lista de usuários</h3>
+            <div id="users-container" class="list-stack">
+              <div class="loading">Loading users…</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <h2 class="section-title">Permissões por app</h2>
+        </div>
+        <div id="app-permissions-container" class="apps-grid">
+          <div class="loading">Loading app permissions…</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="user-groups-overlay" class="overlay" aria-hidden="true">
+    <div class="app-form-modal">
+      <div class="log-header">
+        <h3 id="user-groups-title">Editar grupos</h3>
+        <button type="button" id="user-groups-close" class="btn btn-icon" aria-label="Close">×</button>
+      </div>
+      <div class="app-form">
+        <div id="user-groups-selector" class="checkbox-grid"></div>
+        <div class="form-actions">
+          <button type="button" id="user-groups-cancel" class="btn btn-ghost">Cancelar</button>
+          <button type="button" id="user-groups-save" class="btn btn-primary">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

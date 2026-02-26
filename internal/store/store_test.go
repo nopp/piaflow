@@ -69,3 +69,82 @@ func TestStore_ListRuns(t *testing.T) {
 	}
 }
 
+func TestStore_UserGroupAppRelationships(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "acl.db")
+	st, err := New("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	devID, err := st.CreateGroup("dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	opsID, err := st.CreateGroup("ops")
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID, err := st.CreateUser("alice", "hash", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetUserGroups(userID, []int64{devID, opsID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetAppGroups("app-a", []int64{devID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetAppGroups("app-b", []int64{opsID}); err != nil {
+		t.Fatal(err)
+	}
+
+	groups, err := st.UserGroupIDs(userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(groups))
+	}
+
+	appIDs, err := st.AppIDsByUserGroupIDs(groups)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(appIDs) != 2 {
+		t.Fatalf("expected 2 apps, got %d (%v)", len(appIDs), appIDs)
+	}
+}
+
+func TestStore_DeleteRunsByAppID(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "delete-runs.db")
+	st, err := New("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	_, _ = st.CreateRun("app1", "")
+	_, _ = st.CreateRun("app1", "")
+	_, _ = st.CreateRun("app2", "")
+
+	if err := st.DeleteRunsByAppID("app1"); err != nil {
+		t.Fatal(err)
+	}
+
+	count1, err := st.CountRuns("app1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count1 != 0 {
+		t.Fatalf("expected 0 runs for app1, got %d", count1)
+	}
+
+	count2, err := st.CountRuns("app2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count2 != 1 {
+		t.Fatalf("expected 1 run for app2, got %d", count2)
+	}
+}

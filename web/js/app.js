@@ -6,13 +6,65 @@ async function fetchApi(path, options = {}) {
     method: options.method || 'GET',
     headers: headers,
     body: options.body,
+    credentials: 'same-origin',
   });
   return res;
 }
 
+async function login(username, password) {
+  const res = await fetchApi('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Login failed');
+  }
+  return res.json();
+}
+
+async function logout() {
+  await fetchApi('/auth/logout', { method: 'POST' });
+}
+
+async function getMe() {
+  const res = await fetchApi('/auth/me');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Not authenticated');
+  }
+  return res.json();
+}
+
+async function getProfile() {
+  const res = await fetchApi('/auth/profile');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load profile');
+  }
+  return res.json();
+}
+
+async function changeMyPassword(currentPassword, newPassword) {
+  const res = await fetchApi('/auth/password', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update password');
+  }
+  return res.json();
+}
+
 async function getApps() {
   const res = await fetchApi('/apps');
-  if (!res.ok) throw new Error('Failed to load apps');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load apps');
+  }
   return res.json();
 }
 
@@ -29,6 +81,7 @@ async function triggerRun(appId) {
 
 const RUNS_PAGE_SIZE = 15;
 let runsCurrentPage = 1;
+let currentUser = null;
 
 async function getRuns(appId = '', limit = RUNS_PAGE_SIZE, offset = 0) {
   const params = new URLSearchParams();
@@ -36,13 +89,19 @@ async function getRuns(appId = '', limit = RUNS_PAGE_SIZE, offset = 0) {
   params.set('limit', String(limit));
   params.set('offset', String(offset));
   const res = await fetchApi(`/runs?${params}`);
-  if (!res.ok) throw new Error('Failed to load runs');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load runs');
+  }
   return res.json();
 }
 
 async function getRun(id) {
   const res = await fetchApi(`/runs/${id}`);
-  if (!res.ok) throw new Error('Failed to load run');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load run');
+  }
   return res.json();
 }
 
@@ -80,6 +139,143 @@ async function deleteApp(appId) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || 'Failed to delete app');
   }
+}
+
+async function getUsers() {
+  const res = await fetchApi('/users');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load users');
+  }
+  return res.json();
+}
+
+async function createUser(user) {
+  const res = await fetchApi('/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(user),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to create user');
+  }
+  return res.json();
+}
+
+async function setUserGroups(userId, groupIds) {
+  const res = await fetchApi(`/users/${encodeURIComponent(String(userId))}/groups`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group_ids: groupIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update user groups');
+  }
+  return res.json();
+}
+
+async function updateUserPassword(userId, password) {
+  const res = await fetchApi(`/users/${encodeURIComponent(String(userId))}/password`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update user password');
+  }
+  return res.json();
+}
+
+async function deleteUserById(userId) {
+  const res = await fetchApi(`/users/${encodeURIComponent(String(userId))}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to delete user');
+  }
+}
+
+async function getGroups() {
+  const res = await fetchApi('/groups');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load groups');
+  }
+  return res.json();
+}
+
+async function createGroup(name) {
+  const res = await fetchApi('/groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to create group');
+  }
+  return res.json();
+}
+
+async function getGroup(groupId) {
+  const res = await fetchApi(`/groups/${encodeURIComponent(String(groupId))}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load group');
+  }
+  return res.json();
+}
+
+async function setGroupUsers(groupId, userIds) {
+  const res = await fetchApi(`/groups/${encodeURIComponent(String(groupId))}/users`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_ids: userIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update group users');
+  }
+  return res.json();
+}
+
+async function setGroupApps(groupId, appIds) {
+  const res = await fetchApi(`/groups/${encodeURIComponent(String(groupId))}/apps`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app_ids: appIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update group apps');
+  }
+  return res.json();
+}
+
+async function getAppGroups(appId) {
+  const res = await fetchApi(`/apps/${encodeURIComponent(appId)}/groups`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load app groups');
+  }
+  return res.json();
+}
+
+async function setAppGroups(appId, groupIds) {
+  const res = await fetchApi(`/apps/${encodeURIComponent(appId)}/groups`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group_ids: groupIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update app groups');
+  }
+  return res.json();
 }
 
 function showToast(message, type = 'success') {
@@ -132,7 +328,8 @@ function renderApps(container, apps) {
   const list = Array.isArray(apps) ? apps : [];
   if (!list.length) {
     const emptyMsg = document.getElementById('apps-search') ? 'No apps match your search.' : 'No apps configured.';
-    container.innerHTML = `<p class="empty-state">${emptyMsg} <button type="button" class="btn btn-primary" id="add-app-empty">Add app</button></p>`;
+    const canCreate = currentUser && currentUser.is_admin;
+    container.innerHTML = `<p class="empty-state">${emptyMsg}${canCreate ? ' <button type="button" class="btn btn-primary" id="add-app-empty">Add app</button>' : ''}</p>`;
     const addBtn = container.querySelector('#add-app-empty');
     if (addBtn) addBtn.addEventListener('click', () => openAppForm(null));
     return;
@@ -144,7 +341,7 @@ function renderApps(container, apps) {
       <div class="card-actions">
         <button type="button" class="btn btn-primary run-btn btn-run" data-app-id="${escapeHtml(app.id)}">Run</button>
         <button type="button" class="btn btn-ghost edit-btn btn-edit" data-app-id="${escapeHtml(app.id)}">Edit</button>
-        <button type="button" class="btn btn-ghost delete-btn btn-delete" data-app-id="${escapeHtml(app.id)}">Delete</button>
+        ${currentUser && currentUser.is_admin ? `<button type="button" class="btn btn-ghost delete-btn btn-delete" data-app-id="${escapeHtml(app.id)}">Delete</button>` : ''}
       </div>
     </article>
   `).join('');
@@ -606,6 +803,509 @@ function initAppsPage() {
   loadApps();
   const searchInput = document.getElementById('apps-search');
   if (searchInput) searchInput.addEventListener('input', applyFilter);
+  const addAppBtn = document.getElementById('add-app-btn');
+  if (addAppBtn && currentUser && !currentUser.is_admin) {
+    addAppBtn.hidden = true;
+  }
+}
+
+function selectedGroupIDsFromContainer(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
+    .map(input => Number(input.value))
+    .filter(n => Number.isInteger(n) && n > 0);
+}
+
+function renderGroupSelector(container, groups, checkedIDs = []) {
+  if (!container) return;
+  const checked = new Set(checkedIDs);
+  if (!groups.length) {
+    container.innerHTML = '<p class="empty-state compact">Crie um grupo primeiro.</p>';
+    return;
+  }
+  container.innerHTML = groups.map(group => `
+    <label class="form-checkbox-label checkbox-item">
+      <input type="checkbox" value="${group.id}" ${checked.has(group.id) ? 'checked' : ''} />
+      <span>${escapeHtml(group.name)}</span>
+    </label>
+  `).join('');
+}
+
+function renderGroupsList(groups) {
+  const container = document.getElementById('groups-container');
+  if (!container) return;
+  if (!groups.length) {
+    container.innerHTML = '<p class="empty-state compact">Nenhum grupo cadastrado.</p>';
+    return;
+  }
+  container.innerHTML = groups.map(g => `
+    <article class="list-item">
+      <a class="group-link" href="/group.html?group_id=${encodeURIComponent(g.id)}">${escapeHtml(g.name)}</a>
+      <span class="muted-mono">#${g.id}</span>
+    </article>
+  `).join('');
+}
+
+function renderUsersList(users, groups) {
+  const container = document.getElementById('users-container');
+  if (!container) return;
+  const groupNameByID = new Map((groups || []).map(g => [g.id, g.name]));
+  if (!users.length) {
+    container.innerHTML = '<p class="empty-state compact">Nenhum usuário cadastrado.</p>';
+    return;
+  }
+  container.innerHTML = users.map(user => {
+    const tags = (user.group_ids || [])
+      .map(id => groupNameByID.get(id) || `#${id}`)
+      .map(name => `<span class="pill">${escapeHtml(name)}</span>`)
+      .join('');
+    return `
+      <article class="list-item list-item-column" data-user-id="${user.id}">
+        <div class="list-item-head">
+          <strong>${escapeHtml(user.username)}</strong>
+          <span class="muted-mono">#${user.id}</span>
+        </div>
+        <div class="pill-row">${tags || '<span class="muted">Sem grupos</span>'}</div>
+        <div class="inline-actions">
+          <button type="button" class="btn btn-ghost btn-sm edit-user-groups-btn" data-user-id="${user.id}">Editar grupos</button>
+          <button type="button" class="btn btn-ghost btn-sm edit-user-password-btn" data-user-id="${user.id}">Alterar senha</button>
+          ${user.is_admin ? '' : `<button type="button" class="btn btn-ghost btn-sm delete-user-btn" data-user-id="${user.id}" ${currentUser && Number(currentUser.id) === Number(user.id) ? 'disabled' : ''}>Excluir</button>`}
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function renderAppPermissions(apps, groups, appGroupMap) {
+  const container = document.getElementById('app-permissions-container');
+  if (!container) return;
+  if (!apps.length) {
+    container.innerHTML = '<p class="empty-state">Nenhum app cadastrado.</p>';
+    return;
+  }
+  if (!groups.length) {
+    container.innerHTML = '<p class="empty-state">Crie grupos para configurar permissões por app.</p>';
+    return;
+  }
+  container.innerHTML = apps.map(app => {
+    const assigned = new Set(appGroupMap.get(app.id) || []);
+    const checkboxes = groups.map(group => `
+      <label class="form-checkbox-label checkbox-item">
+        <input type="checkbox" class="app-group-checkbox" data-app-id="${escapeHtml(app.id)}" value="${group.id}" ${assigned.has(group.id) ? 'checked' : ''} />
+        <span>${escapeHtml(group.name)}</span>
+      </label>
+    `).join('');
+    return `
+      <article class="app-card acl-card" data-app-id="${escapeHtml(app.id)}">
+        <h3>${escapeHtml(app.name)}</h3>
+        <p class="app-id">${escapeHtml(app.id)}</p>
+        <div class="checkbox-grid">${checkboxes}</div>
+      </article>
+    `;
+  }).join('');
+}
+
+async function initAccessPage() {
+  const groupsContainer = document.getElementById('groups-container');
+  const usersContainer = document.getElementById('users-container');
+  const appPermissionsContainer = document.getElementById('app-permissions-container');
+  if (!groupsContainer || !usersContainer || !appPermissionsContainer) return;
+
+  let groups = [];
+  let users = [];
+  let apps = [];
+  const appGroupMap = new Map();
+  let editingUserId = null;
+
+  async function reloadAll() {
+    groups = await getGroups();
+    users = await getUsers();
+    apps = await getApps();
+    const allAppGroups = await Promise.all(apps.map(app => getAppGroups(app.id)));
+    appGroupMap.clear();
+    for (const item of allAppGroups) {
+      appGroupMap.set(item.app_id, item.group_ids || []);
+    }
+    renderGroupsList(groups);
+    renderUsersList(users, groups);
+    renderGroupSelector(document.getElementById('user-group-selector'), groups, []);
+    renderAppPermissions(apps, groups, appGroupMap);
+    bindAccessActions();
+  }
+
+  function bindAccessActions() {
+    document.querySelectorAll('.edit-user-groups-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = Number(btn.dataset.userId);
+        const user = users.find(u => Number(u.id) === userId);
+        if (!user) return;
+        openUserGroupsEditor(user);
+      });
+    });
+
+    document.querySelectorAll('.edit-user-password-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = Number(btn.dataset.userId);
+        const user = users.find(u => Number(u.id) === userId);
+        if (!user) return;
+        const password = prompt(`Nova senha para ${user.username}`);
+        if (password == null) return;
+        const trimmed = password.trim();
+        if (!trimmed) {
+          showToast('Senha não pode ser vazia.', 'error');
+          return;
+        }
+        try {
+          await updateUserPassword(userId, trimmed);
+          showToast('Senha atualizada.', 'success');
+        } catch (err) {
+          showToast(err.message || 'Falha ao atualizar senha', 'error');
+        }
+      });
+    });
+
+    document.querySelectorAll('.delete-user-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = Number(btn.dataset.userId);
+        const user = users.find(u => Number(u.id) === userId);
+        if (!user) return;
+        if (!confirm(`Excluir usuário "${user.username}"?`)) return;
+        try {
+          await deleteUserById(userId);
+          showToast('Usuário excluído.', 'success');
+          await reloadAll();
+        } catch (err) {
+          showToast(err.message || 'Falha ao excluir usuário', 'error');
+        }
+      });
+    });
+
+    document.querySelectorAll('.app-group-checkbox').forEach(input => {
+      input.addEventListener('change', async () => {
+        const appId = input.dataset.appId;
+        const card = input.closest('.acl-card');
+        const selectedIDs = selectedGroupIDsFromContainer(card);
+        const allInputs = card ? card.querySelectorAll('.app-group-checkbox') : [];
+        allInputs.forEach(el => { el.disabled = true; });
+        try {
+          await setAppGroups(appId, selectedIDs);
+          appGroupMap.set(appId, selectedIDs);
+          showToast(`Permissões do app "${appId}" atualizadas.`, 'success');
+        } catch (err) {
+          showToast(err.message || 'Falha ao atualizar permissões', 'error');
+          await reloadAll();
+          return;
+        } finally {
+          allInputs.forEach(el => { el.disabled = false; });
+        }
+      });
+    });
+  }
+
+  function openUserGroupsEditor(user) {
+    const overlay = document.getElementById('user-groups-overlay');
+    const title = document.getElementById('user-groups-title');
+    const selector = document.getElementById('user-groups-selector');
+    if (!overlay || !selector) return;
+    editingUserId = Number(user.id);
+    if (title) title.textContent = `Grupos de ${user.username}`;
+    renderGroupSelector(selector, groups, user.group_ids || []);
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeUserGroupsEditor() {
+    const overlay = document.getElementById('user-groups-overlay');
+    if (overlay) overlay.setAttribute('aria-hidden', 'true');
+    editingUserId = null;
+  }
+
+  const groupForm = document.getElementById('group-form');
+  if (groupForm) {
+    groupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nameInput = document.getElementById('group-name');
+      const name = nameInput ? nameInput.value.trim() : '';
+      if (!name) return;
+      try {
+        await createGroup(name);
+        if (nameInput) nameInput.value = '';
+        showToast('Grupo criado.', 'success');
+        await reloadAll();
+      } catch (err) {
+        showToast(err.message || 'Falha ao criar grupo', 'error');
+      }
+    });
+  }
+
+  const userForm = document.getElementById('user-form');
+  if (userForm) {
+    userForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const usernameInput = document.getElementById('user-username');
+      const passwordInput = document.getElementById('user-password');
+      const isAdminInput = document.getElementById('user-is-admin');
+      const username = usernameInput ? usernameInput.value.trim() : '';
+      const password = passwordInput ? passwordInput.value.trim() : '';
+      const isAdmin = !!(isAdminInput && isAdminInput.checked);
+      const groupIDs = selectedGroupIDsFromContainer(document.getElementById('user-group-selector'));
+      if (!username || !password) return;
+      try {
+        await createUser({ username: username, password: password, group_ids: groupIDs, is_admin: isAdmin });
+        if (usernameInput) usernameInput.value = '';
+        if (passwordInput) passwordInput.value = '';
+        if (isAdminInput) isAdminInput.checked = false;
+        renderGroupSelector(document.getElementById('user-group-selector'), groups, []);
+        showToast('Usuário criado.', 'success');
+        await reloadAll();
+      } catch (err) {
+        showToast(err.message || 'Falha ao criar usuário', 'error');
+      }
+    });
+  }
+
+  const userGroupsSave = document.getElementById('user-groups-save');
+  if (userGroupsSave) {
+    userGroupsSave.addEventListener('click', async () => {
+      if (!editingUserId) return;
+      const selector = document.getElementById('user-groups-selector');
+      const groupIDs = selectedGroupIDsFromContainer(selector);
+      userGroupsSave.disabled = true;
+      try {
+        await setUserGroups(editingUserId, groupIDs);
+        showToast('Grupos do usuário atualizados.', 'success');
+        closeUserGroupsEditor();
+        await reloadAll();
+      } catch (err) {
+        showToast(err.message || 'Falha ao atualizar grupos', 'error');
+      } finally {
+        userGroupsSave.disabled = false;
+      }
+    });
+  }
+
+  const userGroupsClose = document.getElementById('user-groups-close');
+  const userGroupsCancel = document.getElementById('user-groups-cancel');
+  const userGroupsOverlay = document.getElementById('user-groups-overlay');
+  if (userGroupsClose) userGroupsClose.addEventListener('click', closeUserGroupsEditor);
+  if (userGroupsCancel) userGroupsCancel.addEventListener('click', closeUserGroupsEditor);
+  if (userGroupsOverlay) {
+    userGroupsOverlay.addEventListener('click', (e) => {
+      if (e.target === userGroupsOverlay) closeUserGroupsEditor();
+    });
+  }
+
+  try {
+    await reloadAll();
+  } catch (err) {
+    groupsContainer.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load access data')}</p>`;
+    usersContainer.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load access data')}</p>`;
+    appPermissionsContainer.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load access data')}</p>`;
+  }
+}
+
+function selectedUserIDs(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
+    .map(input => Number(input.value))
+    .filter(n => Number.isInteger(n) && n > 0);
+}
+
+function selectedAppIDs(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
+    .map(input => String(input.value || '').trim())
+    .filter(v => v !== '');
+}
+
+function renderGroupUsersSelector(container, users, selectedIDs) {
+  if (!container) return;
+  const selected = new Set(selectedIDs || []);
+  container.innerHTML = users.map(user => `
+    <label class="form-checkbox-label checkbox-item">
+      <input type="checkbox" value="${user.id}" ${selected.has(user.id) ? 'checked' : ''} />
+      <span>${escapeHtml(user.username)}</span>
+    </label>
+  `).join('');
+}
+
+function renderGroupAppsSelector(container, apps, selectedIDs) {
+  if (!container) return;
+  const selected = new Set(selectedIDs || []);
+  container.innerHTML = apps.map(app => `
+    <label class="form-checkbox-label checkbox-item">
+      <input type="checkbox" value="${escapeHtml(app.id)}" ${selected.has(app.id) ? 'checked' : ''} />
+      <span>${escapeHtml(app.name)} <span class="muted-mono">(${escapeHtml(app.id)})</span></span>
+    </label>
+  `).join('');
+}
+
+async function initGroupPage() {
+  const groupTitle = document.getElementById('group-title');
+  if (!groupTitle) return;
+  const params = new URLSearchParams(window.location.search);
+  const groupID = Number(params.get('group_id'));
+  if (!Number.isInteger(groupID) || groupID <= 0) {
+    groupTitle.textContent = 'Grupo inválido';
+    return;
+  }
+
+  const usersBox = document.getElementById('group-users-selector');
+  const appsBox = document.getElementById('group-apps-selector');
+  const saveUsersBtn = document.getElementById('save-group-users');
+  const saveAppsBtn = document.getElementById('save-group-apps');
+
+  async function reload() {
+    const data = await getGroup(groupID);
+    groupTitle.textContent = `Grupo: ${data.name}`;
+    renderGroupUsersSelector(usersBox, data.available_users || [], data.user_ids || []);
+    renderGroupAppsSelector(appsBox, data.available_apps || [], data.app_ids || []);
+  }
+
+  if (saveUsersBtn) {
+    saveUsersBtn.addEventListener('click', async () => {
+      const userIDs = selectedUserIDs(usersBox);
+      saveUsersBtn.disabled = true;
+      try {
+        await setGroupUsers(groupID, userIDs);
+        showToast('Usuários do grupo atualizados.', 'success');
+      } catch (err) {
+        showToast(err.message || 'Falha ao salvar usuários', 'error');
+      } finally {
+        saveUsersBtn.disabled = false;
+      }
+    });
+  }
+
+  if (saveAppsBtn) {
+    saveAppsBtn.addEventListener('click', async () => {
+      const appIDs = selectedAppIDs(appsBox);
+      saveAppsBtn.disabled = true;
+      try {
+        await setGroupApps(groupID, appIDs);
+        showToast('Apps do grupo atualizados.', 'success');
+      } catch (err) {
+        showToast(err.message || 'Falha ao salvar apps', 'error');
+      } finally {
+        saveAppsBtn.disabled = false;
+      }
+    });
+  }
+
+  try {
+    await reload();
+  } catch (err) {
+    groupTitle.textContent = err.message || 'Falha ao carregar grupo';
+  }
+}
+
+async function initProfilePage() {
+  const infoEl = document.getElementById('profile-info');
+  const groupsEl = document.getElementById('profile-groups');
+  const appsEl = document.getElementById('profile-apps');
+  const pwdForm = document.getElementById('profile-password-form');
+  if (!infoEl || !groupsEl || !appsEl) return;
+
+  try {
+    const p = await getProfile();
+    infoEl.innerHTML = `
+      <article class="list-item"><strong>Usuário</strong><span>${escapeHtml(p.username || '-')}</span></article>
+      <article class="list-item"><strong>Admin</strong><span>${p.is_admin ? 'Sim' : 'Não'}</span></article>
+    `;
+
+    const groups = Array.isArray(p.groups) ? p.groups : [];
+    groupsEl.innerHTML = groups.length
+      ? groups.map(g => `<article class="list-item"><strong>${escapeHtml(g.name)}</strong><span class="muted-mono">#${g.id}</span></article>`).join('')
+      : '<p class="empty-state compact">Sem grupos.</p>';
+
+    const apps = Array.isArray(p.apps) ? p.apps : [];
+    appsEl.innerHTML = apps.length
+      ? apps.map(a => `<article class="list-item list-item-column"><strong>${escapeHtml(a.name || a.id)}</strong><span class="muted-mono">${escapeHtml(a.id || '')}</span><span class="muted">${escapeHtml(a.repo || '')}</span></article>`).join('')
+      : '<p class="empty-state compact">Sem apps vinculados.</p>';
+  } catch (err) {
+    infoEl.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load profile')}</p>`;
+    groupsEl.innerHTML = '';
+    appsEl.innerHTML = '';
+  }
+
+  if (pwdForm) {
+    pwdForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const currEl = document.getElementById('profile-current-password');
+      const nextEl = document.getElementById('profile-new-password');
+      const curr = currEl ? currEl.value.trim() : '';
+      const next = nextEl ? nextEl.value.trim() : '';
+      if (!curr || !next) {
+        showToast('Preencha senha atual e nova senha.', 'error');
+        return;
+      }
+      try {
+        await changeMyPassword(curr, next);
+        if (currEl) currEl.value = '';
+        if (nextEl) nextEl.value = '';
+        showToast('Senha alterada com sucesso.', 'success');
+      } catch (err) {
+        showToast(err.message || 'Falha ao alterar senha', 'error');
+      }
+    });
+  }
+}
+
+function bindHeaderUser(user) {
+  currentUser = user || null;
+  const currentUserEl = document.getElementById('current-user');
+  if (currentUserEl && user) {
+    currentUserEl.textContent = `${user.username}${user.is_admin ? ' (admin)' : ''}`;
+  }
+  if (!user || !user.is_admin) {
+    document.querySelectorAll('a[href="/access.html"]').forEach(el => {
+      el.style.display = 'none';
+    });
+  }
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      await logout();
+      window.location.href = '/login.html';
+    });
+  }
+}
+
+async function initLoginPage() {
+  const loginForm = document.getElementById('login-form');
+  if (!loginForm) return false;
+  try {
+    await getMe();
+    window.location.href = '/';
+    return true;
+  } catch (_) {}
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = (document.getElementById('login-username') || {}).value || '';
+    const password = (document.getElementById('login-password') || {}).value || '';
+    const errorEl = document.getElementById('login-error');
+    if (errorEl) errorEl.hidden = true;
+    try {
+      await login(username.trim(), password);
+      window.location.href = '/';
+    } catch (err) {
+      if (errorEl) {
+        errorEl.textContent = err.message || 'Falha no login';
+        errorEl.hidden = false;
+      }
+    }
+  });
+  return true;
+}
+
+async function ensureAuthenticated() {
+  try {
+    const data = await getMe();
+    return data.user;
+  } catch (_) {
+    window.location.href = '/login.html';
+    return null;
+  }
 }
 
 async function init() {
@@ -614,9 +1314,25 @@ async function init() {
     showServerUnreachableMessage();
     return;
   }
+  if (await initLoginPage()) return;
+  const me = await ensureAuthenticated();
+  if (!me) return;
+  bindHeaderUser(me);
+  const isAccessPage = !!document.getElementById('groups-container');
+  const isGroupPage = !!document.getElementById('group-title');
+  if (!me.is_admin && (isAccessPage || isGroupPage)) {
+    const main = document.querySelector('.main');
+    if (main) main.innerHTML = '';
+    return;
+  }
   try {
     if (document.getElementById('runs-container')) initRunsPage();
     if (document.getElementById('apps-grid')) initAppsPage();
+    if (document.getElementById('profile-info')) initProfilePage();
+    if (document.getElementById('group-title')) initGroupPage();
+    if (document.getElementById('groups-container')) {
+      initAccessPage();
+    }
   } catch (_) {
     showServerUnreachableMessage();
   }

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"piaflow/internal/auth"
 	"piaflow/internal/config"
 	"piaflow/internal/pipeline"
 	"piaflow/internal/server"
@@ -59,6 +60,22 @@ func main() {
 		log.Fatalf("open store: %v", err)
 	}
 	defer st.Close()
+
+	adminUsername := strings.TrimSpace(os.Getenv("ADMIN_USERNAME"))
+	if adminUsername == "" {
+		adminUsername = "admin"
+	}
+	adminPassword := strings.TrimSpace(os.Getenv("ADMIN_PASSWORD"))
+	if adminPassword == "" {
+		adminPassword = "admin"
+	}
+	adminHash, err := auth.HashPassword(adminPassword)
+	if err != nil {
+		log.Fatalf("hash admin password: %v", err)
+	}
+	if err := st.EnsureAdminUser(adminUsername, adminHash); err != nil {
+		log.Fatalf("ensure admin user: %v", err)
+	}
 
 	runner := pipeline.NewRunner(*workDir)
 	absConfig, _ := filepath.Abs(*configPath)

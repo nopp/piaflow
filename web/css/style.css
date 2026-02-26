@@ -85,6 +85,11 @@ body {
 .current-user {
   font-size: 0.9rem;
   color: var(--text-muted);
+  text-decoration: none;
+}
+
+.current-user:hover {
+  color: var(--text);
 }
 
 .form-error {
@@ -592,4 +597,141 @@ body {
   margin-top: 1.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
+}
+
+.form-actions.compact {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+}
+
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.panel-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.panel-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.stack-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.list-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: var(--bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.group-link {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.group-link:hover {
+  color: var(--accent-hover);
+}
+
+.list-item-column {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.list-item-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.muted-mono {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+}
+
+.pill-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.inline-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-sm {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+}
+
+.checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.3rem;
+}
+
+.checkbox-item {
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.empty-state.compact {
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.acl-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.auth-card {
+  max-width: 420px;
+  margin: 2rem auto 0;
 }
