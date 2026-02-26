@@ -1,18 +1,16 @@
 // Package seed initializes the database with default data at startup.
-// It creates a "default" group, an "admin" user (password: admin) if no users exist,
-// and assigns every app that has no groups to the default group.
-// Run is called once from main after opening the store; there is no HTTP API for groups/users.
+// It creates a "default" group if none exist and assigns every app that has no groups to it.
+// Run is called once from main after opening the store; there is no HTTP API for groups.
 package seed
 
 import (
 	"log"
 
-	"piaflow/internal/auth"
 	"piaflow/internal/config"
 	"piaflow/internal/store"
 )
 
-// Run ensures a default group and admin user exist, and assigns apps without groups to the default group.
+// Run ensures a default group exists and assigns apps without groups to it.
 // Idempotent: safe to call on every startup; only creates missing data.
 func Run(st *store.Store, apps []config.App) {
 	groups, err := st.ListGroups()
@@ -38,26 +36,6 @@ func Run(st *store.Store, apps []config.App) {
 		if defaultGroupID == 0 {
 			defaultGroupID = groups[0].ID
 		}
-	}
-
-	users, err := st.ListUsers()
-	if err != nil {
-		log.Printf("seed: list users: %v", err)
-		return
-	}
-	if len(users) == 0 {
-		hash, err := auth.HashPassword("admin")
-		if err != nil {
-			log.Printf("seed: hash password: %v", err)
-			return
-		}
-		adminID, err := st.CreateUser("admin", hash)
-		if err != nil {
-			log.Printf("seed: create admin user: %v", err)
-			return
-		}
-		_ = st.SetUserGroups(adminID, []int64{defaultGroupID})
-		log.Printf("seed: created user 'admin' (password: admin)")
 	}
 
 	for _, app := range apps {
