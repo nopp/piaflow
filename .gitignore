@@ -5,6 +5,9 @@
 *.db
 *.exe
 
+# MySQL config with credentials (use config/database.example.env as template)
+config/database.env
+
 # Do not commit prompt/history files
 PROMPTS.txt
 PROMPT-CRIAR-APP-DO-ZERO.txt

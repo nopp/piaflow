@@ -7,7 +7,7 @@ import (
 
 func TestStore_CreateRun_UpdateRunStatus_GetRun(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
-	st, err := New(path)
+	st, err := New("sqlite3", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestStore_CreateRun_UpdateRunStatus_GetRun(t *testing.T) {
 
 func TestStore_ListRuns(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "list.db")
-	st, err := New(path)
+	st, err := New("sqlite3", path)
 	if err != nil {
 		t.Fatal(err)
 	}

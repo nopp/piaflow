@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: piaflow
+  labels:
+    app: piaflow
+spec:
+  type: ClusterIP
+  selector:
+    app: piaflow
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

@@ -1,15 +1,29 @@
 # PiaFlow (Go)
 
-Minimal CI/CD system in Go: easy to add apps, easy to maintain, SQLite for data.
+Minimal CI/CD system in Go: easy to add apps, easy to maintain. Supports SQLite (dev) and MySQL (prod).
 
 ## Quick start
 
 ```bash
 make tidy
-make run
+make run-dev
 ```
 
 Server runs at `http://localhost:8080`. Open it in a browser for the **web UI** (apps list, trigger run, recent runs, view run logs). No login required.
+
+## Running locally vs production
+
+- **`make run-dev`** (or `make run`) — Uses **SQLite** with file `data/cicd.db`. No extra config.
+- **`make run-prod`** — Uses **MySQL**. Set `DB_DSN` before running, e.g.:
+  ```bash
+  export DB_DSN='user:password@tcp(host:3306)/dbname?parseTime=true'
+  make run-prod
+  ```
+  Or copy `config/database.example.env` to `config/database.env`, fill in your MySQL credentials, then:
+  ```bash
+  source config/database.env && make run-prod
+  ```
+  (`config/database.env` is gitignored; do not commit credentials.)
 
 ## Documentation
 

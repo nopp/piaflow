@@ -1,5 +1,5 @@
 // Command cicd is the entry point for the PiaFlow server.
-// It loads apps from YAML, opens the SQLite store, and starts the HTTP server
+// It loads apps from YAML, opens the store (SQLite or MySQL), and starts the HTTP server
 // that serves the web UI and the REST API for apps and runs.
 package main
 
@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"piaflow/internal/config"
 	"piaflow/internal/pipeline"
@@ -18,15 +19,32 @@ import (
 
 func main() {
 	configPath := flag.String("config", "config/apps.yaml", "path to apps.yaml")
-	dbPath := flag.String("db", "data/cicd.db", "path to SQLite database")
+	dbPath := flag.String("db", "data/cicd.db", "path to SQLite database (used when DB_DRIVER is not mysql)")
 	workDir := flag.String("work", "work", "directory for cloning repos")
 	staticDir := flag.String("static", "web", "directory for web UI static files")
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	flag.Parse()
 
-	if err := os.MkdirAll(filepath.Dir(*dbPath), 0755); err != nil {
-		log.Fatalf("create data dir: %v", err)
+	dbDriver := strings.TrimSpace(os.Getenv("DB_DRIVER"))
+	if dbDriver == "" {
+		dbDriver = "sqlite3"
 	}
+
+	var dbDSN string
+	switch dbDriver {
+	case "mysql":
+		dbDSN = strings.TrimSpace(os.Getenv("DB_DSN"))
+		if dbDSN == "" {
+			log.Fatal("DB_DSN is required when DB_DRIVER=mysql (e.g. user:password@tcp(host:3306)/dbname?parseTime=true)")
+		}
+	default:
+		dbDriver = "sqlite3"
+		dbDSN = *dbPath
+		if err := os.MkdirAll(filepath.Dir(dbDSN), 0755); err != nil {
+			log.Fatalf("create data dir: %v", err)
+		}
+	}
+
 	if err := os.MkdirAll(*workDir, 0755); err != nil {
 		log.Fatalf("create work dir: %v", err)
 	}
@@ -36,7 +54,7 @@ func main() {
 		log.Fatalf("load apps config: %v", err)
 	}
 
-	st, err := store.New(*dbPath)
+	st, err := store.New(dbDriver, dbDSN)
 	if err != nil {
 		log.Fatalf("open store: %v", err)
 	}

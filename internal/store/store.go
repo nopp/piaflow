@@ -1,11 +1,13 @@
-// Package store provides SQLite persistence for pipeline runs.
+// Package store provides persistence for pipeline runs (SQLite or MySQL).
 // New opens the DB and runs migrations (creates the runs table if not exist).
 package store
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -21,26 +23,67 @@ type Run struct {
 	EndedAt   *time.Time `json:"ended_at,omitempty"`
 }
 
-// Store holds the SQLite connection and is the single entry point for all DB operations.
+// Store holds the DB connection and is the single entry point for all DB operations.
 type Store struct {
-	db *sql.DB
+	db     *sql.DB
+	driver string
 }
 
-// New opens the database at dbPath, runs migrate to create tables, and returns the Store.
-func New(dbPath string) (*Store, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+// New opens the database and runs migrations. driver is "sqlite3" or "mysql".
+// For sqlite3, dsn is the file path (e.g. "data/cicd.db"). For mysql, dsn is the connection string (e.g. "user:password@tcp(host:3306)/dbname?parseTime=true").
+func New(driver, dsn string) (*Store, error) {
+	if driver == "" {
+		driver = "sqlite3"
+	}
+	db, err := sql.Open(driver, dsn)
 	if err != nil {
 		return nil, err
 	}
-	if err := migrate(db); err != nil {
+	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	if err := migrate(db, driver); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return &Store{db: db, driver: driver}, nil
+}
+
+func (s *Store) nowExpr() string {
+	if s.driver == "mysql" {
+		return "NOW()"
+	}
+	return "datetime('now')"
 }
 
 // migrate creates the runs table and indexes if they do not exist.
-func migrate(db *sql.DB) error {
+func migrate(db *sql.DB, driver string) error {
+	if driver == "mysql" {
+		_, err := db.Exec(`
+			CREATE TABLE IF NOT EXISTS runs (
+				id BIGINT AUTO_INCREMENT PRIMARY KEY,
+				app_id VARCHAR(255) NOT NULL,
+				status VARCHAR(50) NOT NULL,
+				commit_sha VARCHAR(255),
+				log TEXT,
+				started_at DATETIME NOT NULL,
+				ended_at DATETIME NULL
+			);
+		`)
+		if err != nil {
+			return err
+		}
+		_, err = db.Exec(`CREATE INDEX idx_runs_app_id ON runs(app_id)`)
+		if err != nil {
+			// ignore if exists
+		}
+		_, err = db.Exec(`CREATE INDEX idx_runs_started_at ON runs(started_at)`)
+		if err != nil {
+			// ignore if exists
+		}
+		return nil
+	}
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS runs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,10 +102,8 @@ func migrate(db *sql.DB) error {
 
 // CreateRun inserts a new run and returns its ID.
 func (s *Store) CreateRun(appID, commitSHA string) (int64, error) {
-	res, err := s.db.Exec(
-		`INSERT INTO runs (app_id, status, commit_sha, started_at) VALUES (?, 'pending', ?, datetime('now'))`,
-		appID, commitSHA,
-	)
+	query := fmt.Sprintf(`INSERT INTO runs (app_id, status, commit_sha, started_at) VALUES (?, 'pending', ?, %s)`, s.nowExpr())
+	res, err := s.db.Exec(query, appID, commitSHA)
 	if err != nil {
 		return 0, err
 	}
@@ -78,10 +119,8 @@ func (s *Store) UpdateRunLog(id int64, log string) error {
 // UpdateRunStatus sets status, log, and ended_at for a run.
 func (s *Store) UpdateRunStatus(id int64, status, log string) error {
 	if status == "success" || status == "failed" {
-		_, err := s.db.Exec(
-			`UPDATE runs SET status = ?, log = ?, ended_at = datetime('now') WHERE id = ?`,
-			status, log, id,
-		)
+		query := fmt.Sprintf(`UPDATE runs SET status = ?, log = ?, ended_at = %s WHERE id = ?`, s.nowExpr())
+		_, err := s.db.Exec(query, status, log, id)
 		return err
 	}
 	_, err := s.db.Exec(`UPDATE runs SET status = ?, log = ? WHERE id = ?`, status, log, id)
