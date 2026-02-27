@@ -420,8 +420,8 @@ func (s *Server) createApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	app := body.App
-	if app.ID == "" || app.Name == "" || app.Repo == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id, name and repo are required"})
+	if app.Name == "" || app.Repo == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and repo are required"})
 		return
 	}
 	if err := validateAndNormalizeApp(&app); err != nil {
@@ -430,12 +430,13 @@ func (s *Server) createApp(w http.ResponseWriter, r *http.Request) {
 	}
 	s.appsMu.Lock()
 	defer s.appsMu.Unlock()
-	for _, a := range s.apps {
-		if a.ID == app.ID {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "app id already exists"})
-			return
-		}
+
+	id, err := s.generateUniqueAppIDLocked()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
 	}
+	app.ID = id
 	newApps := append(s.apps, app)
 	if err := config.SaveApps(s.appsPath, newApps); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -491,6 +492,34 @@ func (s *Server) updateApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, app)
+}
+
+func (s *Server) generateUniqueAppIDLocked() (string, error) {
+	for i := 0; i < 12; i++ {
+		id, err := generateAppID()
+		if err != nil {
+			return "", err
+		}
+		exists := false
+		for _, app := range s.apps {
+			if app.ID == id {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			return id, nil
+		}
+	}
+	return "", errors.New("failed to generate unique app id")
+}
+
+func generateAppID() (string, error) {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return "app-" + hex.EncodeToString(buf), nil
 }
 
 func validateAndNormalizeApp(app *config.App) error {

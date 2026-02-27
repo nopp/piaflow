@@ -639,7 +639,6 @@ async function loadRuns() {
 const appFormOverlay = document.getElementById('app-form-overlay');
 const appForm = document.getElementById('app-form');
 const appFormTitle = document.getElementById('app-form-title');
-const appIdInput = document.getElementById('app-id');
 const appStepsContainer = document.getElementById('app-steps');
 
 function clampStepSleepSec(value) {
@@ -744,17 +743,14 @@ async function openAppForm(appId) {
   const overlay = document.getElementById('app-form-overlay');
   const form = document.getElementById('app-form');
   const titleEl = document.getElementById('app-form-title');
-  const idInput = document.getElementById('app-id');
   if (!form || !overlay) return;
   form.dataset.editId = appId || '';
   overlay.setAttribute('aria-hidden', 'false');
 
   if (appId) {
     if (titleEl) titleEl.textContent = 'Edit app';
-    if (idInput) idInput.disabled = true;
     try {
       const app = await getApp(appId);
-      document.getElementById('app-id').value = app.id || '';
       document.getElementById('app-name').value = app.name || '';
       document.getElementById('app-repo').value = app.repo || '';
       document.getElementById('app-branch').value = app.branch || 'main';
@@ -764,7 +760,6 @@ async function openAppForm(appId) {
     }
   } else {
     if (titleEl) titleEl.textContent = 'Add app';
-    if (idInput) idInput.disabled = false;
     form.reset();
     document.getElementById('app-branch').value = 'main';
     setAppStepsInForm([]);
@@ -793,7 +788,6 @@ if (appForm) {
       return;
     }
     const app = {
-      id: document.getElementById('app-id').value.trim(),
       name: document.getElementById('app-name').value.trim(),
       repo: document.getElementById('app-repo').value.trim(),
       branch: document.getElementById('app-branch').value.trim() || 'main',

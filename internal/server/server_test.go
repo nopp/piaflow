@@ -128,7 +128,6 @@ func TestServer_CreateAndGetAppWithDynamicSteps(t *testing.T) {
 	adminCookie := loginAndCookie(t, h, "admin", "admin")
 
 	createBody := map[string]interface{}{
-		"id":     "app-dyn",
 		"name":   "App Dynamic",
 		"repo":   "https://example.com/dyn.git",
 		"branch": "main",
@@ -146,13 +145,21 @@ func TestServer_CreateAndGetAppWithDynamicSteps(t *testing.T) {
 	if recCreate.Code != http.StatusCreated {
 		t.Fatalf("expected 201 creating app with dynamic steps, got %d body=%s", recCreate.Code, recCreate.Body.String())
 	}
+	var created map[string]interface{}
+	if err := json.NewDecoder(recCreate.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	createdID, _ := created["id"].(string)
+	if createdID == "" {
+		t.Fatalf("expected generated app id, got %+v", created)
+	}
 
-	reqGet := httptest.NewRequest(http.MethodGet, "/api/apps/app-dyn", nil)
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/apps/"+createdID, nil)
 	reqGet.AddCookie(adminCookie)
 	recGet := httptest.NewRecorder()
 	h.ServeHTTP(recGet, reqGet)
 	if recGet.Code != http.StatusOK {
-		t.Fatalf("expected 200 getting app-dyn, got %d", recGet.Code)
+		t.Fatalf("expected 200 getting generated app, got %d", recGet.Code)
 	}
 	var got map[string]interface{}
 	if err := json.NewDecoder(recGet.Body).Decode(&got); err != nil {

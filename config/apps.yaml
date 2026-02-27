@@ -1,5 +1,5 @@
 apps:
-    - id: app-teste
+    - id: app-a00dcd482199b927
       name: app-teste
       repo: https://github.com/nopp/app-teste.git
       branch: main
@@ -10,6 +10,3 @@ apps:
         - name: build
           cmd: go build -o .
           sleep_sec: 10
-        - name: uname
-          cmd: uname -a
-          sleep_sec: 0
