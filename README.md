@@ -3,6 +3,8 @@
 Minimal CI/CD system in Go with app-level access control by groups.
 Supports SQLite (dev) and MySQL (prod).
 
+### ---> Not finished yet! <---
+
 ## Quick Start
 
 ```bash
