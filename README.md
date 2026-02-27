@@ -1,4 +1,4 @@
-# NoppFlow (Go)
+# NoppFlow
 
 Minimal CI/CD system in Go with app-level access control by groups.
 Supports SQLite (dev) and MySQL (prod).
