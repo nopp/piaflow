@@ -5,6 +5,48 @@
 - Build and push the container image (e.g. `noppflow:latest`) to your registry, or use a local image with `imagePullPolicy: IfNotPresent`.
 - MySQL running (in-cluster or external). Create the database and a user for NoppFlow.
 
+## Local kind bootstrap (recommended for team testing)
+
+Use the automated script to create a local kind cluster, local registry, build/push `noppflow` + `noppflow-runner`, deploy MySQL, RBAC, and NoppFlow:
+
+```bash
+./k8s/setup-kind-local.sh
+```
+
+Default local DB mode is `sqlite` for reliability in dev bootstrap.
+To force MySQL mode:
+
+```bash
+DB_MODE=mysql ./k8s/setup-kind-local.sh
+```
+
+Using Podman:
+
+```bash
+podman machine stop
+podman machine set --rootful --cpus 4 --memory 8192
+podman machine start
+CONTAINER_CLI=podman ./k8s/setup-kind-local.sh
+```
+
+Optional: pin kind node image explicitly (default already pinned for stability):
+
+```bash
+KIND_NODE_IMAGE=kindest/node:v1.30.8 CONTAINER_CLI=podman ./k8s/setup-kind-local.sh
+```
+
+Requirements:
+- Docker
+- kind
+- kubectl
+
+After setup:
+
+```bash
+kubectl -n noppflow port-forward svc/noppflow 8080:80
+# open http://localhost:8080 (admin/admin)
+```
+
 ## 1. Create the database secret
 
 Create the secret with the MySQL DSN (replace with your values):
