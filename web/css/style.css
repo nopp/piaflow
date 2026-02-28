@@ -657,6 +657,14 @@ body {
   min-height: 120px;
 }
 
+.k8s-config-panel {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;

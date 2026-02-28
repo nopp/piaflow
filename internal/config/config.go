@@ -12,11 +12,12 @@ import (
 
 // Step defines one pipeline step.
 type Step struct {
-	Name     string `yaml:"name" json:"name"`
-	Cmd      string `yaml:"cmd" json:"cmd"`
-	File     string `yaml:"file,omitempty" json:"file,omitempty"`
-	Script   string `yaml:"script,omitempty" json:"script,omitempty"`
-	SleepSec int    `yaml:"sleep_sec" json:"sleep_sec"`
+	Name      string `yaml:"name" json:"name"`
+	Cmd       string `yaml:"cmd" json:"cmd"`
+	File      string `yaml:"file,omitempty" json:"file,omitempty"`
+	Script    string `yaml:"script,omitempty" json:"script,omitempty"`
+	K8sDeploy bool   `yaml:"k8s_deploy,omitempty" json:"k8s_deploy,omitempty"`
+	SleepSec  int    `yaml:"sleep_sec" json:"sleep_sec"`
 }
 
 // Kind returns which execution mode this step uses.
@@ -25,6 +26,7 @@ func (s Step) Kind() string {
 	cmd := strings.TrimSpace(s.Cmd)
 	file := strings.TrimSpace(s.File)
 	script := strings.TrimSpace(s.Script)
+	k8sDeploy := s.K8sDeploy
 	count := 0
 	kind := ""
 	if cmd != "" {
@@ -38,6 +40,10 @@ func (s Step) Kind() string {
 	if script != "" {
 		count++
 		kind = "script"
+	}
+	if k8sDeploy {
+		count++
+		kind = "k8s_deploy"
 	}
 	if count != 1 {
 		return ""
@@ -54,6 +60,8 @@ func (s Step) CommandValue() string {
 		return strings.TrimSpace(s.File)
 	case "script":
 		return strings.TrimSpace(s.Script)
+	case "k8s_deploy":
+		return "k8s_deploy"
 	default:
 		return ""
 	}
@@ -65,18 +73,25 @@ func (s Step) CommandValue() string {
 // TestCmd and BuildCmd are required; DeployCmd is optional.
 // TestSleepSec, BuildSleepSec, DeploySleepSec are optional: when > 0, the pipeline sleeps that many seconds after the corresponding step.
 type App struct {
-	ID             string `yaml:"id" json:"id"`
-	Name           string `yaml:"name" json:"name"`
-	Repo           string `yaml:"repo" json:"repo"`
-	Branch         string `yaml:"branch" json:"branch"`
-	SSHKeyName     string `yaml:"ssh_key_name,omitempty" json:"ssh_key_name,omitempty"`
-	Steps          []Step `yaml:"steps,omitempty" json:"steps,omitempty"`
-	BuildCmd       string `yaml:"build_cmd,omitempty" json:"build_cmd,omitempty"`
-	TestCmd        string `yaml:"test_cmd,omitempty" json:"test_cmd,omitempty"`
-	DeployCmd      string `yaml:"deploy_cmd,omitempty" json:"deploy_cmd,omitempty"`
-	TestSleepSec   int    `yaml:"test_sleep_sec,omitempty" json:"test_sleep_sec,omitempty"`
-	BuildSleepSec  int    `yaml:"build_sleep_sec,omitempty" json:"build_sleep_sec,omitempty"`
-	DeploySleepSec int    `yaml:"deploy_sleep_sec,omitempty" json:"deploy_sleep_sec,omitempty"`
+	ID                 string `yaml:"id" json:"id"`
+	Name               string `yaml:"name" json:"name"`
+	Repo               string `yaml:"repo" json:"repo"`
+	Branch             string `yaml:"branch" json:"branch"`
+	SSHKeyName         string `yaml:"ssh_key_name,omitempty" json:"ssh_key_name,omitempty"`
+	DeployMode         string `yaml:"deploy_mode,omitempty" json:"deploy_mode,omitempty"`
+	K8sNamespace       string `yaml:"k8s_namespace,omitempty" json:"k8s_namespace,omitempty"`
+	K8sServiceAccount  string `yaml:"k8s_service_account,omitempty" json:"k8s_service_account,omitempty"`
+	K8sRunnerImage     string `yaml:"k8s_runner_image,omitempty" json:"k8s_runner_image,omitempty"`
+	DeployManifestPath string `yaml:"deploy_manifest_path,omitempty" json:"deploy_manifest_path,omitempty"`
+	HelmChart          string `yaml:"helm_chart,omitempty" json:"helm_chart,omitempty"`
+	HelmValuesPath     string `yaml:"helm_values_path,omitempty" json:"helm_values_path,omitempty"`
+	Steps              []Step `yaml:"steps,omitempty" json:"steps,omitempty"`
+	BuildCmd           string `yaml:"build_cmd,omitempty" json:"build_cmd,omitempty"`
+	TestCmd            string `yaml:"test_cmd,omitempty" json:"test_cmd,omitempty"`
+	DeployCmd          string `yaml:"deploy_cmd,omitempty" json:"deploy_cmd,omitempty"`
+	TestSleepSec       int    `yaml:"test_sleep_sec,omitempty" json:"test_sleep_sec,omitempty"`
+	BuildSleepSec      int    `yaml:"build_sleep_sec,omitempty" json:"build_sleep_sec,omitempty"`
+	DeploySleepSec     int    `yaml:"deploy_sleep_sec,omitempty" json:"deploy_sleep_sec,omitempty"`
 }
 
 // AppsConfig is the root of apps.yaml.
@@ -119,11 +134,12 @@ func (a App) EffectiveSteps() []Step {
 				name = "step-" + strconvItoa(i+1)
 			}
 			normalized := Step{
-				Name:     name,
-				Cmd:      strings.TrimSpace(s.Cmd),
-				File:     strings.TrimSpace(s.File),
-				Script:   strings.TrimSpace(s.Script),
-				SleepSec: s.SleepSec,
+				Name:      name,
+				Cmd:       strings.TrimSpace(s.Cmd),
+				File:      strings.TrimSpace(s.File),
+				Script:    strings.TrimSpace(s.Script),
+				K8sDeploy: s.K8sDeploy,
+				SleepSec:  s.SleepSec,
 			}
 			if normalized.Kind() == "" {
 				continue

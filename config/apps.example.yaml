@@ -1,4 +1,4 @@
-# Example: one app with 3 steps (build, test, deploy)
+# Example: one app with dynamic steps and Kubernetes deploy
 # Copy or merge into config/apps.yaml and adjust repo/commands to your project.
 
 apps:
@@ -6,17 +6,20 @@ apps:
     name: My Go Service
     repo: https://github.com/your-org/my-go-service.git
     branch: main
+    deploy_mode: kubectl
+    k8s_namespace: apps
+    k8s_service_account: noppflow-runner
+    k8s_runner_image: ghcr.io/your-org/noppflow-runner:latest
+    deploy_manifest_path: k8s/
+    steps:
+      - name: test
+        cmd: go test -v ./...
+      - name: build
+        cmd: go build -o bin/service ./cmd/server
+      - name: deploy
+        k8s_deploy: true
 
-    # Step 1 — Test: run before build
-    test_cmd: go test -v ./...
-
-    # Step 2 — Build: produce binary/artifacts
-    build_cmd: go build -o bin/service ./cmd/server
-
-    # Step 3 — Deploy: script or command to deploy (e.g. copy binary, restart service)
-    deploy_cmd: "./scripts/deploy.sh"
-
-# Minimal example (no deploy step):
+# Minimal example (legacy fields still supported):
 #
 # apps:
 #   - id: simple-app

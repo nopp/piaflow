@@ -210,6 +210,76 @@ func TestServer_RejectsStepWithMultipleExecutionModes(t *testing.T) {
 	}
 }
 
+func TestServer_CreateAppWithK8sDeployStep(t *testing.T) {
+	h, st, _, _ := setupTestServer(t, []config.App{
+		{ID: "seed", Name: "Seed", Repo: "https://example.com/seed.git", Branch: "main", TestCmd: "echo test", BuildCmd: "echo build"},
+	})
+	adminCookie := loginAndCookie(t, h, "admin", "admin")
+	if _, err := st.CreateSSHKey("key-main", "dummy-private-key"); err != nil {
+		t.Fatal(err)
+	}
+
+	createBody := map[string]interface{}{
+		"name":                 "App K8s",
+		"repo":                 "https://example.com/k8s.git",
+		"branch":               "main",
+		"ssh_key_name":         "key-main",
+		"deploy_mode":          "kubectl",
+		"k8s_namespace":        "apps",
+		"k8s_service_account":  "noppflow-runner",
+		"k8s_runner_image":     "ghcr.io/acme/noppflow-runner:latest",
+		"deploy_manifest_path": "k8s/",
+		"steps": []map[string]interface{}{
+			{"name": "deploy", "k8s_deploy": true},
+		},
+	}
+	bodyBytes, _ := json.Marshal(createBody)
+	reqCreate := httptest.NewRequest(http.MethodPost, "/api/apps", bytes.NewReader(bodyBytes))
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.AddCookie(adminCookie)
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusCreated {
+		t.Fatalf("expected 201 creating app with k8s step, got %d body=%s", recCreate.Code, recCreate.Body.String())
+	}
+	var created map[string]interface{}
+	if err := json.NewDecoder(recCreate.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created["deploy_mode"] != "kubectl" {
+		t.Fatalf("expected deploy_mode kubectl, got %+v", created["deploy_mode"])
+	}
+}
+
+func TestServer_RejectsK8sDeployStepWithoutDeployConfig(t *testing.T) {
+	h, st, _, _ := setupTestServer(t, []config.App{
+		{ID: "seed", Name: "Seed", Repo: "https://example.com/seed.git", Branch: "main", TestCmd: "echo test", BuildCmd: "echo build"},
+	})
+	adminCookie := loginAndCookie(t, h, "admin", "admin")
+	if _, err := st.CreateSSHKey("key-main", "dummy-private-key"); err != nil {
+		t.Fatal(err)
+	}
+
+	createBody := map[string]interface{}{
+		"name":         "App K8s Invalid",
+		"repo":         "https://example.com/k8s.git",
+		"branch":       "main",
+		"ssh_key_name": "key-main",
+		"steps": []map[string]interface{}{
+			{"name": "deploy", "k8s_deploy": true},
+		},
+	}
+	bodyBytes, _ := json.Marshal(createBody)
+	reqCreate := httptest.NewRequest(http.MethodPost, "/api/apps", bytes.NewReader(bodyBytes))
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.AddCookie(adminCookie)
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing deploy config, got %d body=%s", recCreate.Code, recCreate.Body.String())
+	}
+}
+
 func TestServer_ChangeOwnPassword(t *testing.T) {
 	h, st, _, _ := setupTestServer(t, []config.App{
 		{ID: "app-a", Name: "App A", Repo: "https://example.com/a.git", Branch: "main", TestCmd: "echo test", BuildCmd: "echo build"},

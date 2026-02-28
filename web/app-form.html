@@ -46,8 +46,33 @@
             <input type="text" id="app-branch" name="branch" class="form-input" placeholder="main" value="main" />
             <label class="form-label">SSH key <span class="form-hint">(used for git clone/pull)</span></label>
             <select id="app-ssh-key" name="ssh_key_name" class="form-input" required></select>
+
+            <label class="form-label">Deploy mode <span class="form-hint">(used by k8s_deploy step)</span></label>
+            <select id="app-deploy-mode" name="deploy_mode" class="form-input">
+              <option value="">None</option>
+              <option value="kubectl">kubectl apply</option>
+              <option value="helm">helm upgrade --install</option>
+            </select>
+            <div id="k8s-config-panel" class="k8s-config-panel">
+              <label class="form-label">Kubernetes namespace</label>
+              <input type="text" id="app-k8s-namespace" name="k8s_namespace" class="form-input" placeholder="default" />
+              <label class="form-label">Kubernetes service account <span class="form-hint">(RBAC reference)</span></label>
+              <input type="text" id="app-k8s-service-account" name="k8s_service_account" class="form-input" placeholder="noppflow-runner" />
+              <label class="form-label">Runner image <span class="form-hint">(image used by ephemeral Job)</span></label>
+              <input type="text" id="app-k8s-runner-image" name="k8s_runner_image" class="form-input" placeholder="ghcr.io/your-org/noppflow-runner:latest" />
+              <div id="kubectl-fields">
+                <label class="form-label">Manifest path <span class="form-hint">(for kubectl mode)</span></label>
+                <input type="text" id="app-deploy-manifest-path" name="deploy_manifest_path" class="form-input" placeholder="k8s/" />
+              </div>
+              <div id="helm-fields">
+                <label class="form-label">Helm chart <span class="form-hint">(for helm mode)</span></label>
+                <input type="text" id="app-helm-chart" name="helm_chart" class="form-input" placeholder="./charts/my-app" />
+                <label class="form-label">Helm values path <span class="form-hint">(optional)</span></label>
+                <input type="text" id="app-helm-values-path" name="helm_values_path" class="form-input" placeholder="./charts/my-app/values-prod.yaml" />
+              </div>
+            </div>
             <div class="steps-header">
-              <label class="form-label">Pipeline steps <span class="form-hint">(each step must use command, file or inline script)</span></label>
+              <label class="form-label">Pipeline steps <span class="form-hint">(each step must use command, file, inline script or k8s deploy)</span></label>
               <button type="button" id="add-step-btn" class="btn btn-ghost">Add step</button>
             </div>
             <div id="app-steps" class="steps-list"></div>

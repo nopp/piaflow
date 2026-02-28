@@ -81,7 +81,7 @@ func (r *Runner) Run(app config.App, opts RunOptions, onLogUpdate func(log strin
 	steps := app.EffectiveSteps()
 	for _, step := range steps {
 		appendLog("=== Step: %s ===", step.Name)
-		if err := r.runStepWithLog(appWorkDir, step, &log); err != nil {
+		if err := r.runStepWithLog(appWorkDir, app, step, &log); err != nil {
 			if onLogUpdate != nil {
 				onLogUpdate(log.String())
 			}
@@ -145,7 +145,7 @@ func (r *Runner) runScriptWithLog(dir, script string, log *bytes.Buffer) error {
 	return cmd.Run()
 }
 
-func (r *Runner) runStepWithLog(dir string, step config.Step, log *bytes.Buffer) error {
+func (r *Runner) runStepWithLog(dir string, app config.App, step config.Step, log *bytes.Buffer) error {
 	switch step.Kind() {
 	case "cmd":
 		return r.runCmdWithLog(dir, step.Cmd, log)
@@ -153,8 +153,44 @@ func (r *Runner) runStepWithLog(dir string, step config.Step, log *bytes.Buffer)
 		return r.runFileWithLog(dir, step.File, log)
 	case "script":
 		return r.runScriptWithLog(dir, step.Script, log)
+	case "k8s_deploy":
+		return r.runK8sDeployWithLog(dir, app, log)
 	default:
 		return fmt.Errorf("invalid step execution mode")
+	}
+}
+
+func (r *Runner) runK8sDeployWithLog(dir string, app config.App, log *bytes.Buffer) error {
+	switch strings.TrimSpace(strings.ToLower(app.DeployMode)) {
+	case "kubectl":
+		if strings.TrimSpace(app.DeployManifestPath) == "" {
+			return fmt.Errorf("deploy_manifest_path is required for deploy_mode=kubectl")
+		}
+		args := []string{"-n", app.K8sNamespace, "apply", "-f", app.DeployManifestPath}
+		cmd := exec.Command("kubectl", args...)
+		cmd.Dir = dir
+		cmd.Stdout = log
+		cmd.Stderr = log
+		return cmd.Run()
+	case "helm":
+		if strings.TrimSpace(app.HelmChart) == "" {
+			return fmt.Errorf("helm_chart is required for deploy_mode=helm")
+		}
+		releaseName := app.ID
+		if releaseName == "" {
+			releaseName = "noppflow-release"
+		}
+		args := []string{"upgrade", "--install", releaseName, app.HelmChart, "-n", app.K8sNamespace}
+		if strings.TrimSpace(app.HelmValuesPath) != "" {
+			args = append(args, "-f", app.HelmValuesPath)
+		}
+		cmd := exec.Command("helm", args...)
+		cmd.Dir = dir
+		cmd.Stdout = log
+		cmd.Stderr = log
+		return cmd.Run()
+	default:
+		return fmt.Errorf("unsupported deploy_mode for k8s_deploy step: %q", app.DeployMode)
 	}
 }
 

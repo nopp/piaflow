@@ -708,6 +708,7 @@ function getEffectiveStepsForForm(app) {
 }
 
 function stepTypeFromData(step = {}) {
+  if (step.k8s_deploy === true) return 'k8s_deploy';
   if ((step.cmd || '').trim()) return 'cmd';
   if ((step.file || '').trim()) return 'file';
   if ((step.script || '').trim()) return 'script';
@@ -715,12 +716,16 @@ function stepTypeFromData(step = {}) {
 }
 
 function stepValueFromData(step = {}, type = 'cmd') {
+  if (type === 'k8s_deploy') return '';
   if (type === 'file') return (step.file || '').trim();
   if (type === 'script') return step.script || '';
   return (step.cmd || '').trim();
 }
 
 function renderStepValueInput(type, value) {
+  if (type === 'k8s_deploy') {
+    return '<p class="muted">This step runs Kubernetes deploy using app deploy settings.</p>';
+  }
   if (type === 'script') {
     return `<textarea class="form-input textarea-input step-value-input step-script" placeholder="Inline script (shell)" spellcheck="false">${escapeHtml(value)}</textarea>`;
   }
@@ -754,6 +759,7 @@ function renderStepRow(step = {}) {
         <option value="cmd" ${stepType === 'cmd' ? 'selected' : ''}>Command</option>
         <option value="file" ${stepType === 'file' ? 'selected' : ''}>File</option>
         <option value="script" ${stepType === 'script' ? 'selected' : ''}>Inline script</option>
+        <option value="k8s_deploy" ${stepType === 'k8s_deploy' ? 'selected' : ''}>K8s deploy</option>
       </select>
       <input type="number" class="form-input step-sleep-sec" min="0" max="3600" placeholder="Sleep (s)" value="${sleepSec > 0 ? String(sleepSec) : ''}" />
     </div>
@@ -814,22 +820,45 @@ function collectAppStepsFromForm() {
     const sleepInput = row.querySelector('.step-sleep-sec');
     const type = (typeInput && typeInput.value ? typeInput.value : 'cmd').trim();
     const value = (valueInput && valueInput.value != null ? valueInput.value : '').trim();
-    if (!value) return;
     const rawName = (nameInput && nameInput.value ? nameInput.value : '').trim();
     const step = {
       name: rawName || `step-${i + 1}`,
       sleep_sec: clampStepSleepSec(sleepInput ? sleepInput.value : 0),
     };
-    if (type === 'file') {
+    if (type === 'k8s_deploy') {
+      step.k8s_deploy = true;
+    } else if (type === 'file') {
+      if (!value) return;
       step.file = value;
     } else if (type === 'script') {
+      if (!value) return;
       step.script = value;
     } else {
+      if (!value) return;
       step.cmd = value;
     }
     steps.push(step);
   });
   return steps;
+}
+
+function setElementValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = value || '';
+}
+
+function refreshDeployModeFields() {
+  const modeEl = document.getElementById('app-deploy-mode');
+  const panelEl = document.getElementById('k8s-config-panel');
+  const kubectlEl = document.getElementById('kubectl-fields');
+  const helmEl = document.getElementById('helm-fields');
+  if (!modeEl || !panelEl || !kubectlEl || !helmEl) return;
+  const mode = (modeEl.value || '').trim();
+  const hasMode = !!mode;
+  panelEl.hidden = !hasMode;
+  kubectlEl.hidden = mode !== 'kubectl';
+  helmEl.hidden = mode !== 'helm';
 }
 
 function renderSSHKeyOptions(selectedName, isAdminEditing) {
@@ -874,6 +903,14 @@ async function openAppForm(appId) {
       document.getElementById('app-name').value = app.name || '';
       document.getElementById('app-repo').value = app.repo || '';
       document.getElementById('app-branch').value = app.branch || 'main';
+      setElementValue('app-deploy-mode', app.deploy_mode || '');
+      setElementValue('app-k8s-namespace', app.k8s_namespace || '');
+      setElementValue('app-k8s-service-account', app.k8s_service_account || '');
+      setElementValue('app-k8s-runner-image', app.k8s_runner_image || '');
+      setElementValue('app-deploy-manifest-path', app.deploy_manifest_path || '');
+      setElementValue('app-helm-chart', app.helm_chart || '');
+      setElementValue('app-helm-values-path', app.helm_values_path || '');
+      refreshDeployModeFields();
       renderSSHKeyOptions(app.ssh_key_name || '', !!(currentUser && currentUser.is_admin));
       setAppStepsInForm(getEffectiveStepsForForm(app));
     } catch (_) {
@@ -883,6 +920,7 @@ async function openAppForm(appId) {
     if (titleEl) titleEl.textContent = 'Add app';
     form.reset();
     document.getElementById('app-branch').value = 'main';
+    refreshDeployModeFields();
     try {
       appSSHKeysCache = await getSSHKeys();
       renderSSHKeyOptions('', true);
@@ -926,6 +964,13 @@ if (appForm) {
       repo: document.getElementById('app-repo').value.trim(),
       branch: document.getElementById('app-branch').value.trim() || 'main',
       ssh_key_name: (document.getElementById('app-ssh-key') || {}).value || '',
+      deploy_mode: (document.getElementById('app-deploy-mode') || {}).value || '',
+      k8s_namespace: (document.getElementById('app-k8s-namespace') || {}).value || '',
+      k8s_service_account: (document.getElementById('app-k8s-service-account') || {}).value || '',
+      k8s_runner_image: (document.getElementById('app-k8s-runner-image') || {}).value || '',
+      deploy_manifest_path: (document.getElementById('app-deploy-manifest-path') || {}).value || '',
+      helm_chart: (document.getElementById('app-helm-chart') || {}).value || '',
+      helm_values_path: (document.getElementById('app-helm-values-path') || {}).value || '',
       steps,
     };
     if (!app.ssh_key_name.trim() && (!editId || (currentUser && currentUser.is_admin))) {
@@ -958,6 +1003,12 @@ if (addStepBtn) {
     renderStepRow({ name: '', cmd: '', file: '', script: '', sleep_sec: 0 });
     refreshStepRemoveButtons();
   });
+}
+
+const deployModeSelect = document.getElementById('app-deploy-mode');
+if (deployModeSelect) {
+  deployModeSelect.addEventListener('change', refreshDeployModeFields);
+  refreshDeployModeFields();
 }
 
 const addAppBtn = document.getElementById('add-app-btn');

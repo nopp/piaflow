@@ -402,9 +402,16 @@ func (s *Server) getApp(w http.ResponseWriter, r *http.Request) {
 		if a.ID == appID {
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"id": a.ID, "name": a.Name, "repo": a.Repo, "branch": a.Branch,
-				"ssh_key_name": a.SSHKeyName,
-				"steps":        a.EffectiveSteps(),
-				"test_cmd":     a.TestCmd, "build_cmd": a.BuildCmd, "deploy_cmd": a.DeployCmd,
+				"ssh_key_name":         a.SSHKeyName,
+				"deploy_mode":          a.DeployMode,
+				"k8s_namespace":        a.K8sNamespace,
+				"k8s_service_account":  a.K8sServiceAccount,
+				"k8s_runner_image":     a.K8sRunnerImage,
+				"deploy_manifest_path": a.DeployManifestPath,
+				"helm_chart":           a.HelmChart,
+				"helm_values_path":     a.HelmValuesPath,
+				"steps":                a.EffectiveSteps(),
+				"test_cmd":             a.TestCmd, "build_cmd": a.BuildCmd, "deploy_cmd": a.DeployCmd,
 				"test_sleep_sec": a.TestSleepSec, "build_sleep_sec": a.BuildSleepSec, "deploy_sleep_sec": a.DeploySleepSec,
 			})
 			return
@@ -539,6 +546,13 @@ func generateAppID() (string, error) {
 
 func (s *Server) validateAndNormalizeApp(app *config.App, requireSSHKey bool) error {
 	app.SSHKeyName = strings.TrimSpace(app.SSHKeyName)
+	app.DeployMode = strings.TrimSpace(strings.ToLower(app.DeployMode))
+	app.K8sNamespace = strings.TrimSpace(app.K8sNamespace)
+	app.K8sServiceAccount = strings.TrimSpace(app.K8sServiceAccount)
+	app.K8sRunnerImage = strings.TrimSpace(app.K8sRunnerImage)
+	app.DeployManifestPath = strings.TrimSpace(app.DeployManifestPath)
+	app.HelmChart = strings.TrimSpace(app.HelmChart)
+	app.HelmValuesPath = strings.TrimSpace(app.HelmValuesPath)
 	if requireSSHKey && app.SSHKeyName == "" {
 		return errors.New("ssh_key_name is required")
 	}
@@ -559,8 +573,32 @@ func (s *Server) validateAndNormalizeApp(app *config.App, requireSSHKey bool) er
 		return errors.New("at least one step is required")
 	}
 	for _, step := range normalized.Steps {
-		if step.Kind() == "" {
-			return errors.New("each step must define exactly one of: cmd, file, script")
+		kind := step.Kind()
+		if kind == "" {
+			return errors.New("each step must define exactly one of: cmd, file, script, k8s_deploy")
+		}
+		if kind == "k8s_deploy" {
+			switch app.DeployMode {
+			case "kubectl":
+				if app.DeployManifestPath == "" {
+					return errors.New("deploy_manifest_path is required when deploy_mode=kubectl and step uses k8s_deploy")
+				}
+			case "helm":
+				if app.HelmChart == "" {
+					return errors.New("helm_chart is required when deploy_mode=helm and step uses k8s_deploy")
+				}
+			default:
+				return errors.New("deploy_mode must be kubectl or helm when step uses k8s_deploy")
+			}
+			if app.K8sNamespace == "" {
+				return errors.New("k8s_namespace is required when step uses k8s_deploy")
+			}
+			if app.K8sServiceAccount == "" {
+				return errors.New("k8s_service_account is required when step uses k8s_deploy")
+			}
+			if app.K8sRunnerImage == "" {
+				return errors.New("k8s_runner_image is required when step uses k8s_deploy")
+			}
 		}
 		if step.SleepSec < 0 || step.SleepSec > 3600 {
 			return errors.New("each step sleep_sec must be between 0 and 3600")
@@ -648,17 +686,22 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	appCopy := *app
-	keyPath, cleanupKey, err := writeTempSSHKey(key.PrivateKey)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to prepare ssh key"})
-		return
-	}
 	go func() {
-		defer cleanupKey()
 		_ = s.store.UpdateRunStatus(runID, "running", "")
 		onLogUpdate := func(log string) { _ = s.store.UpdateRunLog(runID, log) }
-		gitSSHCommand := buildGitSSHCommand(keyPath)
-		result := s.runner.Run(appCopy, pipeline.RunOptions{GitSSHCommand: gitSSHCommand}, onLogUpdate)
+		result := pipeline.Result{}
+		if appUsesK8sJob(appCopy) {
+			result = s.runAppAsK8sJob(runID, appCopy, key.PrivateKey, onLogUpdate)
+		} else {
+			keyPath, cleanupKey, err := writeTempSSHKey(key.PrivateKey)
+			if err != nil {
+				result = pipeline.Result{Success: false, Log: "failed to prepare ssh key"}
+			} else {
+				defer cleanupKey()
+				gitSSHCommand := buildGitSSHCommand(keyPath)
+				result = s.runner.Run(appCopy, pipeline.RunOptions{GitSSHCommand: gitSSHCommand}, onLogUpdate)
+			}
+		}
 		status := "success"
 		if !result.Success {
 			status = "failed"

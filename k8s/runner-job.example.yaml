@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: noppflow-runner-example
+  namespace: apps
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: noppflow-runner
+      containers:
+        - name: runner
+          image: your-registry/noppflow-runner:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: APP_ID
+              value: example-app
+            - name: RUN_ID
+              value: "123"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              git clone --branch main --single-branch git@github.com:org/repo.git /work/app
+              cd /work/app
+              go test ./...
+              kubectl -n apps apply -f k8s/

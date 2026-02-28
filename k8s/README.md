@@ -19,6 +19,7 @@ See `secret.example.yaml` for more options.
 ## 2. Deploy
 
 ```bash
+kubectl apply -f k8s/controller-serviceaccount.example.yaml
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 ```
@@ -37,3 +38,50 @@ kubectl port-forward service/noppflow 8080:80
 - **Image**: Update `image` in `deployment.yaml` to your registry/image:tag.
 - **Replicas**: Change `spec.replicas` in `deployment.yaml`.
 - **Config / work dir**: Uncomment the volumes and volumeMounts in the deployment if you need to mount `config/apps.yaml` or a PVC for the `work` directory (clone output).
+
+## Runner RBAC and Job Template
+
+For app-level deploy inside the cluster, use:
+
+- `runner-rbac.example.yaml`: service account + namespace-scoped role/binding for deploy commands.
+- `runner-job.example.yaml`: example ephemeral job to run steps and deploy using `kubectl`.
+
+NoppFlow can now create ephemeral runner Jobs automatically for apps that include a `k8s_deploy` step.
+In app settings, set:
+- `k8s_namespace`
+- `k8s_service_account`
+- `k8s_runner_image`
+- `deploy_mode` (`kubectl` or `helm`)
+
+## Controller RBAC (NoppFlow API Pod)
+
+NoppFlow API needs permission to create and monitor ephemeral Jobs and temporary SSH Secrets.
+
+### Recommended: namespace-scoped RBAC
+
+Apply `controller-rbac.namespace.example.yaml` in each app namespace (adjust namespace names first):
+
+```bash
+kubectl apply -f k8s/controller-rbac.namespace.example.yaml
+```
+
+### Alternative: cluster-wide RBAC
+
+If apps run in many namespaces and you want a single binding:
+
+```bash
+kubectl apply -f k8s/controller-rbac.cluster.example.yaml
+```
+
+This is broader; prefer namespace-scoped where possible.
+
+Apply after adjusting namespace/image/permissions:
+
+```bash
+kubectl apply -f k8s/runner-rbac.example.yaml
+kubectl apply -f k8s/runner-job.example.yaml
+```
+
+Operational checklist and troubleshooting:
+
+- `k8s/RUNBOOK.md`

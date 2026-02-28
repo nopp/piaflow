@@ -99,3 +99,19 @@ func TestEffectiveStepsSupportsFileAndScript(t *testing.T) {
 		t.Fatalf("unexpected second step: %+v", steps[1])
 	}
 }
+
+func TestEffectiveStepsSupportsK8sDeploy(t *testing.T) {
+	app := App{
+		ID: "k8s",
+		Steps: []Step{
+			{Name: "deploy", K8sDeploy: true},
+		},
+	}
+	steps := app.EffectiveSteps()
+	if len(steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(steps))
+	}
+	if steps[0].Kind() != "k8s_deploy" || !steps[0].K8sDeploy {
+		t.Fatalf("unexpected step: %+v", steps[0])
+	}
+}

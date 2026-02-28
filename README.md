@@ -52,6 +52,7 @@ Main pages:
 - `/login.html` — login
 - `/` — recent runs
 - `/apps.html` — apps list and app actions
+- `/app-form.html` — app create/edit (full pipeline and deploy settings)
 - `/profile.html` — current user profile (name, groups, accessible repos/apps, change password)
 - `/access.html` — admin-only access management (users, groups, app permissions)
 - `/group.html?group_id=<id>` — admin-only group detail editor (members and apps)
@@ -66,12 +67,21 @@ Notes:
 Each run executes app-defined `steps` in order.
 Each step has:
 - `name`
-- `cmd`
+- exactly one of: `cmd`, `file`, `script`, `k8s_deploy`
 - optional `sleep_sec` (0..3600)
 
 Before steps, NoppFlow clones or pulls the app repository into `work/<app_id>/`.
 Git clone/pull uses the app's configured SSH key (`ssh_key_name`).
 If any step fails, run status becomes `failed`.
+
+For `k8s_deploy` steps, app deploy settings are used and NoppFlow runs an ephemeral Kubernetes Job per run:
+- `deploy_mode`: `kubectl` or `helm`
+- `k8s_namespace`
+- `k8s_service_account` (RBAC reference)
+- `k8s_runner_image` (container image used by ephemeral Job runner)
+- `deploy_manifest_path` (required for `kubectl`)
+- `helm_chart` (required for `helm`)
+- optional `helm_values_path`
 
 ## App Configuration
 
@@ -86,13 +96,18 @@ apps:
     repo: git@github.com:org/my-service.git
     branch: main
     ssh_key_name: github-main
+    deploy_mode: kubectl
+    k8s_namespace: apps
+    k8s_service_account: noppflow-runner
+    k8s_runner_image: ghcr.io/your-org/noppflow-runner:latest
+    deploy_manifest_path: k8s/
     steps:
       - name: test
         cmd: go test ./...
       - name: build
         cmd: go build -o bin/app .
       - name: deploy
-        cmd: ./scripts/deploy.sh
+        k8s_deploy: true
         sleep_sec: 5
 ```
 
@@ -190,6 +205,7 @@ When running `bin/cicd` or `go run ./cmd/cicd`:
 ## Documentation
 
 - [CODE.md](CODE.md) — package/file/function reference
+- [k8s/RUNBOOK.md](k8s/RUNBOOK.md) — Kubernetes operations runbook (ephemeral Jobs)
 - `/docs.html` — architecture and API docs in the web UI
 
 ## Screenshots
