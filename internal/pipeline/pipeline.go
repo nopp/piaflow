@@ -35,6 +35,7 @@ type Result struct {
 // RunOptions configures runtime behavior for a pipeline run.
 type RunOptions struct {
 	GitSSHCommand string
+	StepEnv       map[string]string
 }
 
 // Run executes clone, test, build, and optionally deploy for the given app.
@@ -78,10 +79,11 @@ func (r *Runner) Run(app config.App, opts RunOptions, onLogUpdate func(log strin
 	commit, _ := r.output(gitEnv, appWorkDir, "git", "rev-parse", "HEAD")
 	appendLog("commit: %s", strings.TrimSpace(commit))
 
+	stepEnv := envMapToList(opts.StepEnv)
 	steps := app.EffectiveSteps()
 	for _, step := range steps {
 		appendLog("=== Step: %s ===", step.Name)
-		if err := r.runStepWithLog(appWorkDir, app, step, &log); err != nil {
+		if err := r.runStepWithLog(stepEnv, appWorkDir, app, step, &log); err != nil {
 			if onLogUpdate != nil {
 				onLogUpdate(log.String())
 			}
@@ -115,49 +117,73 @@ func (r *Runner) runCmd(env []string, dir, name string, args ...string) error {
 }
 
 // runCmdWithLog runs a shell command (parsed by splitCommand) in dir and writes stdout/stderr to log.
-func (r *Runner) runCmdWithLog(dir, command string, log *bytes.Buffer) error {
+func (r *Runner) runCmdWithLog(env []string, dir, command string, log *bytes.Buffer) error {
 	parts := splitCommand(command)
 	if len(parts) == 0 {
 		return nil
 	}
 	cmd := exec.Command(parts[0], parts[1:]...)
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.Stdout = log
 	cmd.Stderr = log
 	return cmd.Run()
 }
 
 // runFileWithLog runs a script file path via sh in dir.
-func (r *Runner) runFileWithLog(dir, filePath string, log *bytes.Buffer) error {
+func (r *Runner) runFileWithLog(env []string, dir, filePath string, log *bytes.Buffer) error {
 	cmd := exec.Command("sh", filePath)
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.Stdout = log
 	cmd.Stderr = log
 	return cmd.Run()
 }
 
 // runScriptWithLog runs inline script text via sh -c in dir.
-func (r *Runner) runScriptWithLog(dir, script string, log *bytes.Buffer) error {
+func (r *Runner) runScriptWithLog(env []string, dir, script string, log *bytes.Buffer) error {
 	cmd := exec.Command("sh", "-c", script)
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.Stdout = log
 	cmd.Stderr = log
 	return cmd.Run()
 }
 
-func (r *Runner) runStepWithLog(dir string, app config.App, step config.Step, log *bytes.Buffer) error {
+func (r *Runner) runStepWithLog(env []string, dir string, app config.App, step config.Step, log *bytes.Buffer) error {
 	switch step.Kind() {
 	case "cmd":
-		return r.runCmdWithLog(dir, step.Cmd, log)
+		return r.runCmdWithLog(env, dir, step.Cmd, log)
 	case "file":
-		return r.runFileWithLog(dir, step.File, log)
+		return r.runFileWithLog(env, dir, step.File, log)
 	case "script":
-		return r.runScriptWithLog(dir, step.Script, log)
+		return r.runScriptWithLog(env, dir, step.Script, log)
 	case "k8s_deploy":
 		return r.runK8sDeployWithLog(dir, app, log)
 	default:
 		return fmt.Errorf("invalid step execution mode")
 	}
+}
+
+func envMapToList(m map[string]string) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(m))
+	for k, v := range m {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		out = append(out, k+"="+v)
+	}
+	return out
 }
 
 func (r *Runner) runK8sDeployWithLog(dir string, app config.App, log *bytes.Buffer) error {

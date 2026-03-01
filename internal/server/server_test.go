@@ -280,6 +280,77 @@ func TestServer_RejectsK8sDeployStepWithoutDeployConfig(t *testing.T) {
 	}
 }
 
+func TestServer_GlobalEnvVarsAdminCRUDAndNonAdminForbidden(t *testing.T) {
+	h, st, _, _ := setupTestServer(t, []config.App{
+		{ID: "seed", Name: "Seed", Repo: "https://example.com/seed.git", Branch: "main", TestCmd: "echo test", BuildCmd: "echo build"},
+	})
+	adminCookie := loginAndCookie(t, h, "admin", "admin")
+
+	hash, err := auth.HashPassword("alice123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateUser("alice", hash, false); err != nil {
+		t.Fatal(err)
+	}
+	aliceCookie := loginAndCookie(t, h, "alice", "alice123")
+
+	createBody := map[string]interface{}{"name": "API_BASE_URL", "value": "https://example.com"}
+	bodyBytes, _ := json.Marshal(createBody)
+	reqCreate := httptest.NewRequest(http.MethodPost, "/api/env-vars", bytes.NewReader(bodyBytes))
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.AddCookie(adminCookie)
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusCreated {
+		t.Fatalf("expected 201 creating env var, got %d body=%s", recCreate.Code, recCreate.Body.String())
+	}
+
+	reqListAdmin := httptest.NewRequest(http.MethodGet, "/api/env-vars", nil)
+	reqListAdmin.AddCookie(adminCookie)
+	recListAdmin := httptest.NewRecorder()
+	h.ServeHTTP(recListAdmin, reqListAdmin)
+	if recListAdmin.Code != http.StatusOK {
+		t.Fatalf("expected 200 listing env vars as admin, got %d", recListAdmin.Code)
+	}
+	var vars []map[string]interface{}
+	if err := json.NewDecoder(recListAdmin.Body).Decode(&vars); err != nil {
+		t.Fatal(err)
+	}
+	if len(vars) != 1 {
+		t.Fatalf("expected 1 env var, got %d", len(vars))
+	}
+	idFloat, _ := vars[0]["id"].(float64)
+	id := int64(idFloat)
+
+	updateBody := map[string]interface{}{"name": "API_URL", "value": "https://api.internal"}
+	updateBytes, _ := json.Marshal(updateBody)
+	reqUpdate := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/env-vars/%d", id), bytes.NewReader(updateBytes))
+	reqUpdate.Header.Set("Content-Type", "application/json")
+	reqUpdate.AddCookie(adminCookie)
+	recUpdate := httptest.NewRecorder()
+	h.ServeHTTP(recUpdate, reqUpdate)
+	if recUpdate.Code != http.StatusOK {
+		t.Fatalf("expected 200 updating env var, got %d body=%s", recUpdate.Code, recUpdate.Body.String())
+	}
+
+	reqListAlice := httptest.NewRequest(http.MethodGet, "/api/env-vars", nil)
+	reqListAlice.AddCookie(aliceCookie)
+	recListAlice := httptest.NewRecorder()
+	h.ServeHTTP(recListAlice, reqListAlice)
+	if recListAlice.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 listing env vars as non-admin, got %d", recListAlice.Code)
+	}
+
+	reqDelete := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/env-vars/%d", id), nil)
+	reqDelete.AddCookie(adminCookie)
+	recDelete := httptest.NewRecorder()
+	h.ServeHTTP(recDelete, reqDelete)
+	if recDelete.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 deleting env var, got %d", recDelete.Code)
+	}
+}
+
 func TestServer_ChangeOwnPassword(t *testing.T) {
 	h, st, _, _ := setupTestServer(t, []config.App{
 		{ID: "app-a", Name: "App A", Repo: "https://example.com/a.git", Branch: "main", TestCmd: "echo test", BuildCmd: "echo build"},

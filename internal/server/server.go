@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -90,6 +91,10 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/ssh-keys", s.listSSHKeys)
 			r.Post("/ssh-keys", s.createSSHKey)
 			r.Delete("/ssh-keys/{keyID}", s.deleteSSHKey)
+			r.Get("/env-vars", s.listEnvVars)
+			r.Post("/env-vars", s.createEnvVar)
+			r.Put("/env-vars/{envVarID}", s.updateEnvVar)
+			r.Delete("/env-vars/{envVarID}", s.deleteEnvVar)
 			r.Get("/users", s.listUsers)
 			r.Post("/users", s.createUser)
 			r.Put("/users/{userID}/groups", s.setUserGroups)
@@ -689,9 +694,10 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		_ = s.store.UpdateRunStatus(runID, "running", "")
 		onLogUpdate := func(log string) { _ = s.store.UpdateRunLog(runID, log) }
+		stepEnv := s.loadGlobalStepEnv()
 		result := pipeline.Result{}
 		if appUsesK8sJob(appCopy) {
-			result = s.runAppAsK8sJob(runID, appCopy, key.PrivateKey, onLogUpdate)
+			result = s.runAppAsK8sJob(runID, appCopy, key.PrivateKey, stepEnv, onLogUpdate)
 		} else {
 			keyPath, cleanupKey, err := writeTempSSHKey(key.PrivateKey)
 			if err != nil {
@@ -699,7 +705,7 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 			} else {
 				defer cleanupKey()
 				gitSSHCommand := buildGitSSHCommand(keyPath)
-				result = s.runner.Run(appCopy, pipeline.RunOptions{GitSSHCommand: gitSSHCommand}, onLogUpdate)
+				result = s.runner.Run(appCopy, pipeline.RunOptions{GitSSHCommand: gitSSHCommand, StepEnv: stepEnv}, onLogUpdate)
 			}
 		}
 		status := "success"
@@ -710,6 +716,18 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"run_id": runID, "status": "pending"})
+}
+
+func (s *Server) loadGlobalStepEnv() map[string]string {
+	vars, err := s.store.ListGlobalEnvVars()
+	if err != nil {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(vars))
+	for _, v := range vars {
+		out[v.Name] = v.Value
+	}
+	return out
 }
 
 func buildGitSSHCommand(keyPath string) string {
@@ -803,6 +821,114 @@ func (s *Server) deleteSSHKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) listEnvVars(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	vars, err := s.store.ListGlobalEnvVars()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, vars)
+}
+
+func validEnvVarName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, r := range name {
+		if i == 0 {
+			if !(r == '_' || unicode.IsLetter(r)) {
+				return false
+			}
+			continue
+		}
+		if !(r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Server) createEnvVar(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	var body struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	value := body.Value
+	if !validEnvVarName(name) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid env var name"})
+		return
+	}
+	id, err := s.store.CreateGlobalEnvVar(name, value)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]interface{}{"id": id, "name": name, "value": value})
+}
+
+func (s *Server) deleteEnvVar(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "envVarID"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid env var id"})
+		return
+	}
+	if err := s.store.DeleteGlobalEnvVar(id); storeErrNoRows(err) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "env var not found"})
+		return
+	} else if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) updateEnvVar(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "envVarID"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid env var id"})
+		return
+	}
+	var body struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	value := body.Value
+	if !validEnvVarName(name) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid env var name"})
+		return
+	}
+	if err := s.store.UpdateGlobalEnvVar(id, name, value); storeErrNoRows(err) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "env var not found"})
+		return
+	} else if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"id": id, "name": name, "value": value})
 }
 
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {

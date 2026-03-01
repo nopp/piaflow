@@ -24,7 +24,7 @@ func appUsesK8sJob(app config.App) bool {
 	return false
 }
 
-func (s *Server) runAppAsK8sJob(runID int64, app config.App, privateKey string, onLogUpdate func(log string)) pipeline.Result {
+func (s *Server) runAppAsK8sJob(runID int64, app config.App, privateKey string, stepEnv map[string]string, onLogUpdate func(log string)) pipeline.Result {
 	namespace := strings.TrimSpace(app.K8sNamespace)
 	if namespace == "" {
 		return pipeline.Result{Success: false, Log: "k8s namespace is required"}
@@ -40,7 +40,7 @@ func (s *Server) runAppAsK8sJob(runID int64, app config.App, privateKey string, 
 
 	jobName := fmt.Sprintf("noppflow-run-%d", runID)
 	secretName := jobName + "-ssh"
-	script := buildK8sJobScript(app)
+	script := buildK8sJobScript(app, stepEnv)
 	if strings.TrimSpace(script) == "" {
 		return pipeline.Result{Success: false, Log: "empty k8s job script"}
 	}
@@ -199,7 +199,7 @@ spec:
 `, jobName, namespace, serviceAccount, image, indentYAMLBlock(script, 14), secretName)
 }
 
-func buildK8sJobScript(app config.App) string {
+func buildK8sJobScript(app config.App, stepEnv map[string]string) string {
 	steps := app.EffectiveSteps()
 	lines := []string{
 		"set -eu",
@@ -208,6 +208,13 @@ func buildK8sJobScript(app config.App) string {
 		fmt.Sprintf("export GIT_SSH_COMMAND=%s", shellQuote("ssh -i /var/run/noppflow-ssh/id_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new")),
 		fmt.Sprintf("git clone --branch %s --single-branch %s repo", shellQuote(app.Branch), shellQuote(app.Repo)),
 		"cd repo",
+	}
+	for k, v := range stepEnv {
+		name := strings.TrimSpace(k)
+		if name == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("export %s=%s", name, shellQuote(v)))
 	}
 	for _, step := range steps {
 		lines = append(lines, fmt.Sprintf("echo %s", shellQuote("=== Step: "+step.Name+" ===")))

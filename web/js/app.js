@@ -310,6 +310,51 @@ async function deleteSSHKeyById(keyId) {
   }
 }
 
+async function getEnvVars() {
+  const res = await fetchApi('/env-vars');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load env vars');
+  }
+  return res.json();
+}
+
+async function createEnvVar(name, value) {
+  const res = await fetchApi('/env-vars', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, value }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to create env var');
+  }
+  return res.json();
+}
+
+async function deleteEnvVarById(envVarID) {
+  const res = await fetchApi(`/env-vars/${encodeURIComponent(String(envVarID))}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to delete env var');
+  }
+}
+
+async function updateEnvVarById(envVarID, name, value) {
+  const res = await fetchApi(`/env-vars/${encodeURIComponent(String(envVarID))}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, value }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update env var');
+  }
+  return res.json();
+}
+
 function showToast(message, type = 'success') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
@@ -1194,6 +1239,33 @@ function renderSSHKeysList(keys) {
   `).join('');
 }
 
+function maskSecretValue(v) {
+  if (!v) return '';
+  return '•'.repeat(Math.min(12, Math.max(4, String(v).length)));
+}
+
+function renderEnvVarsList(vars, showValues) {
+  const container = document.getElementById('env-vars-container');
+  if (!container) return;
+  if (!vars.length) {
+    container.innerHTML = '<p class="empty-state compact">No global env vars created yet.</p>';
+    return;
+  }
+  container.innerHTML = vars.map(v => `
+    <article class="list-item list-item-column">
+      <div class="list-item-head">
+        <strong>${escapeHtml(v.name)}</strong>
+        <span class="muted-mono">#${v.id}</span>
+      </div>
+      <div class="muted-mono">${escapeHtml(showValues ? (v.value || '') : maskSecretValue(v.value || ''))}</div>
+      <div class="inline-actions">
+        <button type="button" class="btn btn-ghost btn-sm edit-env-var-btn" data-env-var-id="${v.id}">Edit</button>
+        <button type="button" class="btn btn-ghost btn-sm delete-env-var-btn" data-env-var-id="${v.id}" data-env-var-name="${escapeHtml(v.name)}">Delete</button>
+      </div>
+    </article>
+  `).join('');
+}
+
 async function initAccessPage() {
   const groupsContainer = document.getElementById('groups-container');
   const usersContainer = document.getElementById('users-container');
@@ -1204,14 +1276,18 @@ async function initAccessPage() {
   let users = [];
   let apps = [];
   let sshKeys = [];
+  let envVars = [];
   const appGroupMap = new Map();
   let editingUserId = null;
+  let editingEnvVarID = null;
+  let showEnvVarValues = false;
 
   async function reloadAll() {
     groups = await getGroups();
     users = await getUsers();
     apps = await getApps();
     sshKeys = await getSSHKeys();
+    envVars = await getEnvVars();
     const allAppGroups = await Promise.all(apps.map(app => getAppGroups(app.id)));
     appGroupMap.clear();
     for (const item of allAppGroups) {
@@ -1222,6 +1298,7 @@ async function initAccessPage() {
     renderGroupSelector(document.getElementById('user-group-selector'), groups, []);
     renderAppPermissions(apps, groups, appGroupMap);
     renderSSHKeysList(sshKeys);
+    renderEnvVarsList(envVars, showEnvVarValues);
     bindAccessActions();
   }
 
@@ -1308,6 +1385,54 @@ async function initAccessPage() {
         }
       });
     });
+
+    document.querySelectorAll('.delete-env-var-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const envVarID = Number(btn.dataset.envVarId);
+        const name = btn.dataset.envVarName || `#${envVarID}`;
+        if (!confirm(`Delete global env var "${name}"?`)) return;
+        try {
+          await deleteEnvVarById(envVarID);
+          showToast('Global env var deleted.', 'success');
+          await reloadAll();
+        } catch (err) {
+          showToast(err.message || 'Failed to delete env var', 'error');
+        }
+      });
+    });
+
+    document.querySelectorAll('.edit-env-var-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const envVarID = Number(btn.dataset.envVarId);
+        const envVar = envVars.find(v => Number(v.id) === envVarID);
+        if (!envVar) return;
+        const form = document.getElementById('env-var-form');
+        const nameInput = document.getElementById('env-var-name');
+        const valueInput = document.getElementById('env-var-value');
+        const submitBtn = document.getElementById('env-var-submit');
+        const cancelBtn = document.getElementById('env-var-cancel-edit');
+        editingEnvVarID = envVarID;
+        if (form) form.dataset.editId = String(envVarID);
+        if (nameInput) nameInput.value = envVar.name || '';
+        if (valueInput) valueInput.value = envVar.value || '';
+        if (submitBtn) submitBtn.textContent = 'Update variable';
+        if (cancelBtn) cancelBtn.hidden = false;
+      });
+    });
+  }
+
+  function resetEnvVarForm() {
+    const form = document.getElementById('env-var-form');
+    const nameInput = document.getElementById('env-var-name');
+    const valueInput = document.getElementById('env-var-value');
+    const submitBtn = document.getElementById('env-var-submit');
+    const cancelBtn = document.getElementById('env-var-cancel-edit');
+    editingEnvVarID = null;
+    if (form) form.dataset.editId = '';
+    if (nameInput) nameInput.value = '';
+    if (valueInput) valueInput.value = '';
+    if (submitBtn) submitBtn.textContent = 'Save variable';
+    if (cancelBtn) cancelBtn.hidden = true;
   }
 
   function openUserGroupsEditor(user) {
@@ -1392,6 +1517,45 @@ async function initAccessPage() {
     });
   }
 
+  const envVarForm = document.getElementById('env-var-form');
+  if (envVarForm) {
+    envVarForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nameInput = document.getElementById('env-var-name');
+      const valueInput = document.getElementById('env-var-value');
+      const name = nameInput ? nameInput.value.trim() : '';
+      const value = valueInput ? valueInput.value : '';
+      if (!name) return;
+      try {
+        if (editingEnvVarID) {
+          await updateEnvVarById(editingEnvVarID, name, value);
+          showToast('Global env var updated.', 'success');
+        } else {
+          await createEnvVar(name, value);
+          showToast('Global env var created.', 'success');
+        }
+        resetEnvVarForm();
+        await reloadAll();
+      } catch (err) {
+        showToast(err.message || 'Failed to save env var', 'error');
+      }
+    });
+  }
+
+  const envVarCancelEdit = document.getElementById('env-var-cancel-edit');
+  if (envVarCancelEdit) {
+    envVarCancelEdit.addEventListener('click', resetEnvVarForm);
+  }
+
+  const envVarsShowValues = document.getElementById('env-vars-show-values');
+  if (envVarsShowValues) {
+    envVarsShowValues.addEventListener('change', () => {
+      showEnvVarValues = !!envVarsShowValues.checked;
+      renderEnvVarsList(envVars, showEnvVarValues);
+      bindAccessActions();
+    });
+  }
+
   const userGroupsSave = document.getElementById('user-groups-save');
   if (userGroupsSave) {
     userGroupsSave.addEventListener('click', async () => {
@@ -1431,6 +1595,8 @@ async function initAccessPage() {
     appPermissionsContainer.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load access data')}</p>`;
     const keysContainer = document.getElementById('ssh-keys-container');
     if (keysContainer) keysContainer.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load access data')}</p>`;
+    const envContainer = document.getElementById('env-vars-container');
+    if (envContainer) envContainer.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load access data')}</p>`;
   }
 }
 

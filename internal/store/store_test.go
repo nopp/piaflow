@@ -192,3 +192,53 @@ func TestStore_SSHKeysCRUD(t *testing.T) {
 		t.Fatalf("expected nil key after delete, got %+v", byID)
 	}
 }
+
+func TestStore_GlobalEnvVarsCRUD(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "env-vars.db")
+	st, err := New("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	id, err := st.CreateGlobalEnvVar("API_BASE_URL", "https://example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id <= 0 {
+		t.Fatalf("expected positive env var id, got %d", id)
+	}
+
+	vars, err := st.ListGlobalEnvVars()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vars) != 1 {
+		t.Fatalf("expected 1 env var, got %d", len(vars))
+	}
+	if vars[0].Name != "API_BASE_URL" || vars[0].Value != "https://example.com" {
+		t.Fatalf("unexpected env var: %+v", vars[0])
+	}
+
+	if err := st.UpdateGlobalEnvVar(id, "API_URL", "https://api.local"); err != nil {
+		t.Fatal(err)
+	}
+	vars, err = st.ListGlobalEnvVars()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vars) != 1 || vars[0].Name != "API_URL" || vars[0].Value != "https://api.local" {
+		t.Fatalf("unexpected env var after update: %+v", vars)
+	}
+
+	if err := st.DeleteGlobalEnvVar(id); err != nil {
+		t.Fatal(err)
+	}
+	vars, err = st.ListGlobalEnvVars()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vars) != 0 {
+		t.Fatalf("expected no env vars after delete, got %d", len(vars))
+	}
+}

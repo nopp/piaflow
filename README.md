@@ -70,6 +70,8 @@ Each step has:
 - exactly one of: `cmd`, `file`, `script`, `k8s_deploy`
 - optional `sleep_sec` (0..3600)
 
+Global env vars (admin-managed) are injected into all step executions, so `cmd` and `script` can use them directly (e.g. `$API_BASE_URL`).
+
 Before steps, NoppFlow clones or pulls the app repository into `work/<app_id>/`.
 Git clone/pull uses the app's configured SSH key (`ssh_key_name`).
 If any step fails, run status becomes `failed`.
@@ -148,6 +150,13 @@ All API routes are under `/api`.
 - `GET /api/ssh-keys`
 - `POST /api/ssh-keys`
 - `DELETE /api/ssh-keys/{keyID}`
+
+### Global Env Vars (admin)
+
+- `GET /api/env-vars`
+- `POST /api/env-vars` (`name`, `value`)
+- `PUT /api/env-vars/{envVarID}` (`name`, `value`)
+- `DELETE /api/env-vars/{envVarID}`
 
 ### Runs
 

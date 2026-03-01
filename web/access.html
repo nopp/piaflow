@@ -120,6 +120,34 @@
           </div>
         </div>
       </section>
+
+      <section class="section">
+        <div class="section-header">
+          <h2 class="section-title">Global Environment Variables</h2>
+        </div>
+        <div class="split-grid">
+          <div class="panel-card">
+            <h3 class="panel-title">Create variable</h3>
+            <form id="env-var-form" class="stack-form" data-edit-id="">
+              <label class="form-label">Name</label>
+              <input type="text" id="env-var-name" class="form-input" placeholder="API_BASE_URL" required />
+              <label class="form-label">Value</label>
+              <textarea id="env-var-value" class="form-input textarea-input" rows="4" placeholder="https://api.example.com" required></textarea>
+              <div class="form-actions compact">
+                <button type="button" id="env-var-cancel-edit" class="btn btn-ghost" hidden>Cancel</button>
+                <button type="submit" id="env-var-submit" class="btn btn-primary">Save variable</button>
+              </div>
+            </form>
+          </div>
+          <div class="panel-card">
+            <h3 class="panel-title">Saved variables</h3>
+            <label class="form-checkbox-label"><input type="checkbox" id="env-vars-show-values" /> Show values</label>
+            <div id="env-vars-container" class="list-stack">
+              <div class="loading">Loading global env vars…</div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 

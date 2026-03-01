@@ -79,6 +79,8 @@ Core methods:
   - `AppIDsByUserGroupIDs`
 - SSH keys:
   - `CreateSSHKey`, `ListSSHKeys`, `GetSSHKey`, `GetSSHKeyByName`, `DeleteSSHKey`
+- Global env vars:
+  - `CreateGlobalEnvVar`, `ListGlobalEnvVars`, `DeleteGlobalEnvVar`
 
 Migrations create:
 - `runs`
@@ -87,6 +89,7 @@ Migrations create:
 - `user_groups`
 - `app_groups`
 - `ssh_keys`
+- `global_env_vars`
 
 ## internal/pipeline
 
@@ -113,6 +116,7 @@ Responsibilities:
 - App CRUD + run trigger
 - Ephemeral Kubernetes Job orchestration for apps with `k8s_deploy` steps
 - SSH key CRUD + app SSH-key validation
+- Global env vars CRUD (admin only), injected into step execution
 - Users/groups/admin operations
 - Static file serving
 
@@ -137,6 +141,11 @@ Public HTTP routes:
   - `GET /api/ssh-keys`
   - `POST /api/ssh-keys`
   - `DELETE /api/ssh-keys/{keyID}`
+- Global env vars (admin):
+  - `GET /api/env-vars`
+  - `POST /api/env-vars`
+  - `PUT /api/env-vars/{envVarID}`
+  - `DELETE /api/env-vars/{envVarID}`
 - Runs:
   - `GET /api/runs`
   - `GET /api/runs/{id}`
