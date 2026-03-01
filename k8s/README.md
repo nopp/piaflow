@@ -3,7 +3,9 @@
 ## Prerequisites
 
 - Build and push the container image (e.g. `noppflow:latest`) to your registry, or use a local image with `imagePullPolicy: IfNotPresent`.
-- MySQL running (in-cluster or external). Create the database and a user for NoppFlow.
+- Database:
+  - local bootstrap script uses SQLite by default
+  - MySQL is optional for local and typical for production
 
 ## Local kind bootstrap (recommended for team testing)
 

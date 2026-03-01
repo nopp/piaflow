@@ -38,7 +38,7 @@ make run-prod
 
 - Login is required for API and UI features.
 - Sessions are cookie-based (`HttpOnly`).
-- `admin` users can manage users, groups, app-group bindings, and app lifecycle.
+- `admin` users can manage users, groups, app-group bindings, app lifecycle, SSH keys, and global env vars.
 - Non-admin users can:
   - view only apps allowed by their groups
   - run allowed apps
@@ -71,6 +71,7 @@ Each step has:
 - optional `sleep_sec` (0..3600)
 
 Global env vars (admin-managed) are injected into all step executions, so `cmd` and `script` can use them directly (e.g. `$API_BASE_URL`).
+In Access, global env var values are masked by default and can be revealed with `Show values`.
 
 Before steps, NoppFlow clones or pulls the app repository into `work/<app_id>/`.
 Git clone/pull uses the app's configured SSH key (`ssh_key_name`).
@@ -190,6 +191,7 @@ Main tables:
 - `user_groups`
 - `app_groups`
 - `ssh_keys`
+- `global_env_vars`
 
 Important behavior:
 - Deleting an app also deletes all runs for that app.

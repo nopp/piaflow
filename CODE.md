@@ -80,7 +80,7 @@ Core methods:
 - SSH keys:
   - `CreateSSHKey`, `ListSSHKeys`, `GetSSHKey`, `GetSSHKeyByName`, `DeleteSSHKey`
 - Global env vars:
-  - `CreateGlobalEnvVar`, `ListGlobalEnvVars`, `DeleteGlobalEnvVar`
+  - `CreateGlobalEnvVar`, `ListGlobalEnvVars`, `UpdateGlobalEnvVar`, `DeleteGlobalEnvVar`
 
 Migrations create:
 - `runs`
@@ -201,7 +201,7 @@ Contains:
 - auth/bootstrap checks
 - runs/apps rendering and actions
 - app step editor and SSH key selector in app form
-- admin access management flows (users/groups/app permissions/SSH keys)
+- admin access management flows (users/groups/app permissions/SSH keys/global env vars with masked values and edit support)
 - group detail page editor
 - profile rendering and self password change
 
